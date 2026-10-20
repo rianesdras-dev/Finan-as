@@ -1,0 +1,6 @@
+Extrato conta corrente
+Dt. balancete Dt. movimento Ag.origem Lote Histórico Documento Valor R$ Saldo
+03/10/2026 0000 14397 Pix - Enviado 100103 150,00 D
+03/10 12:40 Beltrana Souza
+03/10/2026 0000 99015 BB Rende Fácil 9903 150,00 C
+10/10/2026 Saldo do dia 201,45 C

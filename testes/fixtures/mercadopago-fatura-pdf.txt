@@ -1,0 +1,15 @@
+Mercado Pago - Cartão de crédito
+Vencimento: 10/11/2026
+Resumo da fatura
+Consumos de 06/10 a 05/11 R$ 300,00
+Total R$ 300,00
+Movimentações na fatura
+07/10 Pagamento da fatura de outubro/2026 R$ 812,40
+08/10 Juros do rotativo R$ 12,30
+Cartão Visa [************1470]
+Data Movimentações Valor em R$
+15/05 LOJA*EXEMPLO Parcela 6 de 10 R$ 44,94
+19/10 MP*RESTAURANTESABOR R$ 42,50
+Total R$ 87,44
+Lançamentos futuros
+15/11 LOJA*EXEMPLO Parcela 7 de 10 R$ 44,94

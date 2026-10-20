@@ -1,0 +1,5 @@
+data,hora,tipo,origem / destino,valor,forma de pagamento
+02/10/2026,08:15:22,Pix recebido,Hospital Exemplo Ltda,"+R$ 5.000,00",
+03/10/2026,12:40:01,Compra realizada,Padaria Pao Quente,"−R$ 18,90",Com saldo
+05/10/2026,09:00:00,Dinheiro guardado,No cofrinho Formatura,"−R$ 300,00",Com saldo
+10/10/2026,10:00:00,Pagamento de fatura,Fatura PicPay Card,"−R$ 820,00",Com saldo

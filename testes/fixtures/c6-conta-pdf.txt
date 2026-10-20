@@ -1,0 +1,8 @@
+C6 Bank
+Período • 1 de outubro de 2026 até 19 de outubro de 2026
+Outubro 2026
+Data Data Tipo Descrição Valor
+lançamento contábil
+02/10 02/10 Entrada PIX Pix recebido de HOSPITAL EXEMPLO R$ 5.000,00
+03/10 03/10 Saída PIX Pix enviado para Beltrana Souza -R$ 150,00
+Saldo do dia 03/10/26 R$ 4.970,35

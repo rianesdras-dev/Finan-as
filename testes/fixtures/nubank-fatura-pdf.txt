@@ -1,0 +1,15 @@
+FATURA 14 NOV 2026 EMISSÃO E ENVIO 07 NOV 2026
+Período vigente: 07 OUT a 07 NOV
+TRANSAÇÕES DE 07 OUT A 07 NOV
+Ana P Ribeiro R$ 612,40
+19 OUT •••• 1234 Ifd*Restaurante Sabor R$ 42,50
+21 OUT •••• 1234 Loja Exemplo - Parcela 2/3 R$ 66,67
+23 OUT IOF de "Openai *Chatgpt Subscr" R$ 4,12
+23 OUT •••• 1234 Openai *Chatgpt Subscr
+USD 20.00
+Conversão: USD 1 = R$ 5,44
+R$ 108,80
+Pagamentos e Financiamentos -R$ 1.250,00
+25 OUT Pagamento em 25 OUT −R$ 1.250,00
+25 OUT Saldo restante da fatura anterior R$ 0,00
+Em até 6x: divididos em 6 parcelas de R$ 70,12

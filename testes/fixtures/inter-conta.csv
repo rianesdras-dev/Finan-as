@@ -1,0 +1,10 @@
+Extrato Conta Corrente
+Conta ;12345678
+Período ;01/10/2026 a 19/10/2026
+Saldo: ;3.120,35
+
+Data Lançamento;Descrição;Valor;Saldo
+02/10/2026;Pix recebido: "Cp :18236120-HOSPITAL EXEMPLO LTDA";5.000,00;5.120,35
+03/10/2026;Compra no debito: "PADARIA PAO QUENTE";-18,90;5.101,45
+05/10/2026;Aplicacao: "CDB Porq Obj BANCO INTER S A";-300,00;4.801,45
+10/10/2026;Pagamento efetuado: "Pagamento fatura cartao Inter";-1.681,10;3.120,35

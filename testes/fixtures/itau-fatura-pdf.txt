@@ -1,0 +1,22 @@
+Postagem: 03/11/2026
+Emissão: 05/11/2026 Vencimento: 15/11/2026
+O total da sua fatura é: R$ 2.003,18
+Lançamentos: compras e saques
+DATA ESTABELECIMENTO VALOR EM R$
+19/10 IFD*RESTAURANTE SABOR 42,50
+RESTAURANTE .SAO PAULO
+21/10 UBER *UBER *TRIP 23,90
+28/08 LOJA EXEMPLO ROUPA03/06 112,67
+Lançamentos internacionais
+DATA ESTABELECIMENTO US$ R$
+04/10 OPENAI *CHATGPT SUBS 108,80
+SAN FRANCISCO 20,00 USD 20,00
+Dólar de Conversão R$ 5,44
+Repasse de IOF em R$ 3,81
+Lançamentos: produtos e serviços
+16/10 ANUIDADE DIFERENCI06/12 35,00
+Total dos lançamentos atuais 322,08
+Pagamentos efetuados
+10/10 PAGAMENTO EFETUADO -1.681,10
+Compras parceladas - próximas faturas
+28/08 LOJA EXEMPLO ROUPA04/06 112,67

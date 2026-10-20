@@ -1,0 +1,7 @@
+BTG Pactual
+Período de 01/10/2026 a 19/10/2026
+Movimentação Conta Corrente
+Data Descrição Valor Saldo
+01/10/2026 Saldo Inicial 120,35
+02/10/2026 Pix recebido Hospital Exemplo Ltda 5.000,00 5.120,35
+05/10/2026 Aplicação CDB BTG 300,00 4.820,35

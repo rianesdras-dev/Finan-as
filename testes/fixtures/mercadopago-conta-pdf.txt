@@ -1,0 +1,14 @@
+EXTRATO DE CONTA
+Periodo: De 01-10-2026 al 19-10-2026
+Saldo inicial: R$ 120,35
+Entradas: R$ 0,06
+Saidas: R$ -68,51
+DETALHE DOS MOVIMENTOS
+Data          Descrição                    ID da operação                   Valor                Saldo
+02-10-2026    Rendimentos                  1726751323194                  R$ 0,06            R$ 120,41
+              Compra de 2 produtos
+03-10-2026                                 101754796278                  R$ -48,51           R$ 71,90
+              Mercado Livre
+              Transferência Pix enviada
+05-10-2026                                 143869767019                 R$ -20,00          R$ 51,90
+              Beltrana Souza

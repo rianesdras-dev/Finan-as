@@ -1,0 +1,8 @@
+C6 Bank - Fatura
+Vencimento: 15 de novembro
+C6 Carbon Final 1234 - ANA P RIBEIRO
+19 out IFD*RESTAURANTE SABOR 42,50
+21 out MAGALU*LOJA EXEMPLO - Parcela 3/6 66,67
+23 out OPENAI *CHATGPT USD 20,00 | Cotação USD: R$ 5,440 108,80
+23 out IOF Transações Exterior 3,81
+Subtotal deste cartão R$ 221,78

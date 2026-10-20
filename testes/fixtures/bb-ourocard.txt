@@ -1,0 +1,12 @@
+                         Fatura do Cartão de Crédito
+Vencimento      : 15.11.2026
+Total da fatura : R$ 1.322,08
+Data     Transações                             País        Valor R$   Valor US$
+--------------------------------------------------------------------------------
+         1 - ANA P RIBEIRO
+         Pagamentos/Créditos
+10.10.2026PGTO DEBITO CONTA 1234 000001234  200211           -1.681,10        0,00
+         Restaurantes
+19.10.2026RESTAURANTE SABOR      SAO PAULO     BR               42,50        0,00
+28.05.2026LOJA EXEMPLO  PARC 06/06 SAO PAULO   BR              112,67        0,00
+         SubTotal                                             155,17        0,00

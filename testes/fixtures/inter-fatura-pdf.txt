@@ -1,0 +1,11 @@
+Banco Inter - Fatura do cartão
+Data de vencimento: 15/11/2026
+Despesas da fatura
+CARTÃO 5554****1234
+Data Movimentação Beneficiário Valor
+05 de out. 2026 PADARIA PAO QUENTE - R$ 12,30
+07 de out. 2026 PAGAMENTO ON LINE - + R$ 1.681,10
+09 de out. 2026 LOJA EXEMPLO (Parcela 02 de 05) - R$ 89,90
+Total CARTÃO 5554****1234 R$ 102,20
+Próxima fatura
+LOJA EXEMPLO (Parcela 03 de 05) R$ 89,90

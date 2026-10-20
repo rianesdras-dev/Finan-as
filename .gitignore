@@ -1,0 +1,5 @@
+node_modules/
+.DS_Store
+# dados pessoais exportados do app nunca entram no repositório (ele é público)
+*.json
+!app/manifest.webmanifest

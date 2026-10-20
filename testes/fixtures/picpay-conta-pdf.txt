@@ -1,0 +1,5 @@
+PicPay
+MOVIMENTAÇÕES 1 DE OUTUBRO DE 2026 A 19 DE OUTUBRO DE 2026
+Data/Hora Descrição Valor Saldo
+05/10/2026 09:00 Dinheiro guardado No cofrinho Formatura -R$ 300,00 R$ 4.681,10
+03/10/2026 12:40 Compra realizada Padaria Pao Quente -R$ 18,90 R$ 4.981,10

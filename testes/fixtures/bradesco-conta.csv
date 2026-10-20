@@ -1,0 +1,13 @@
+﻿Extrato de: Ag: 1000 | Conta: 2000-1;;;;;
+Data;Histórico;Docto.;Crédito (R$);Débito (R$);Saldo (R$)
+01/10/2026;COD. LANC. 0;0;0,00; ;120,35
+02/10/2026;PIX RECEBIDO;1715031;5.000,00; ;5.120,35
+03/10/2026;PIX QR CODE DINAMICO;1943038; ;18,90;5.101,45
+10/10/2026;PAGTO ELETRON  COBRANCA;66; ;1.681,10;3.420,35
+;;;;;
+Filtro de resultados - Movimentação entre: 01/10/2026 e 19/10/2026;;;;;
+Os dados acima tem como base as informações disponíveis;;;;;
+Últimos Lancamentos;;;;;
+Data;Histórico;Docto.;Crédito (R$);Débito (R$);
+19/10/2026;RENDIMENTOS;850509;0,42; ;3.420,77
+;;Total;5.000,42;1.700,00;3.420,77;
