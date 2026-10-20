@@ -1,7 +1,7 @@
 /* Financeiro — funciona sem internet. Arquivos do app: rede primeiro, cópia
    guardada se estiver offline. Fontes do Google: cópia guardada primeiro. */
-const CACHE = 'financeiro-v3';
-const CORE = ['./', 'index.html', 'extrato.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+const CACHE = 'financeiro-v4';
+const CORE = ['./', 'index.html', 'extrato.js', 'conferencia.js', 'comprovantes.js', 'agenda.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.all(CORE.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));
@@ -13,6 +13,21 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   const r = e.request;
+  // Android: "Compartilhar › Financeiro" manda o comprovante para cá; guardo e abro o app
+  if (r.method === 'POST' && new URL(r.url).pathname.endsWith('/compartilhar')) {
+    e.respondWith((async () => {
+      try {
+        const form = await r.formData(), c = await caches.open('financeiro-compartilhado');
+        let i = 0;
+        for (const f of form.getAll('arquivo')) {
+          if (!f || typeof f === 'string') continue;
+          await c.put('./compartilhado/' + Date.now() + '-' + (i++), new Response(f, { headers: { 'Content-Type': f.type || 'application/octet-stream', 'X-Nome': encodeURIComponent(f.name || 'comprovante') } }));
+        }
+      } catch (_) {}
+      return Response.redirect('./?compartilhado=1', 303);
+    })());
+    return;
+  }
   if (r.method !== 'GET') return;
   const u = new URL(r.url);
   const fonte = u.hostname === 'fonts.googleapis.com' || u.hostname === 'fonts.gstatic.com';

@@ -10,7 +10,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Financeiro">
-<meta name="description" content="Organização financeira pessoal: quanto dá pra gastar hoje, contas do mês, cartão, parcelas e reserva.">
+<meta name="description" content="App pessoal e privado.">
+<meta name="robots" content="noindex, nofollow, noarchive">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -250,6 +251,30 @@ table.tb{width:100%;border-collapse:collapse;font-size:14px}
 details.como{margin-top:14px;border-top:1px solid var(--div);padding-top:6px}
 details.como summary{cursor:pointer;font-weight:600;padding:8px 0;color:var(--acc-strong)}
 details.como p{margin:0 0 8px}
+.agora{border-left:3px solid var(--acc)}
+.agora.feito{border-left-color:var(--ok)}
+.passos{display:flex;gap:4px;margin:0 0 10px}
+.passos i{flex:1;height:4px;background:var(--track)}
+.passos i.on{background:var(--acc)}
+.carta{border:1px solid var(--div);background:var(--card);padding:12px 14px;margin-bottom:8px}
+.arq{display:flex;align-items:center;gap:10px;padding:8px 0 0}
+.arq .tx{flex:1;min-width:0}
+.arq .tx b{display:block;font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.arq .tx span{display:block;font-size:12px;color:var(--mut)}
+.thumb{width:44px;height:44px;object-fit:cover;flex:none;border:1px solid var(--div)}
+.thumb.pdf{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--warn);background:var(--card)}
+#cadeado{position:fixed;inset:0;z-index:90;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px 16px calc(24px + var(--safe-b))}
+#cadeado.hide{display:none}
+.cad{width:100%;max-width:360px;display:flex;flex-direction:column;align-items:center;text-align:center}
+.pontos{display:flex;gap:14px;margin:22px 0 8px}
+.pontos i{width:14px;height:14px;border-radius:50%;border:2px solid var(--acc)}
+.pontos i.on{background:var(--acc)}
+.treme{animation:treme .3s}
+@keyframes treme{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+#toast #tacao{color:var(--on-hero);border:1px solid color-mix(in srgb,var(--on-hero) 40%,transparent);padding:6px 10px;text-transform:none;letter-spacing:0;font-size:13.5px}
+.discreto .big,.discreto .num,.discreto .v,.discreto .mv,.discreto .dv,.discreto .tb td:not(:first-child){filter:blur(8px)}
+.discreto #sheet .big,.discreto #sheet .v,.discreto #sheet .num{filter:none}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 .dh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:12px 16px 2px;border-top:1px solid var(--div)}
 .dh:first-child{border-top:0}
 </style>
@@ -267,11 +292,17 @@ details.como p{margin:0 0 8px}
   <button data-tab="cartoes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="5.5" width="19" height="13"/><path d="M2.5 10h19M6 15h5"/></svg>Cartões</button>
   <button data-tab="futuro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20h18M5 16l5-5 4 3 6-7"/><path d="M15 7h5v5"/></svg>Futuro</button>
 </nav>
-<div id="toast"><span></span><button id="undo">desfazer</button></div>
+<div id="toast" role="status" aria-live="polite"><span></span><button id="tacao" class="hide"></button><button id="undo">desfazer</button></div>
+<div id="cadeado" class="hide" role="dialog" aria-modal="true" aria-label="App trancado"></div>
 <div id="backdrop"><div id="tapclose"></div><div id="sheet" role="dialog" aria-modal="true"></div></div>
 <input type="file" id="i-import" accept="application/json,.json" class="hide">
 <input type="file" id="i-ext" accept=".ofx,.qfx,.csv,.txt,.pdf,text/csv,application/pdf,application/x-ofx" multiple class="hide">
+<input type="file" id="i-comp" accept="image/*,application/pdf" class="hide">
+<input type="file" id="i-fat" accept=".ofx,.qfx,.csv,.txt,.pdf,text/csv,application/pdf,application/x-ofx" class="hide">
 <script src="extrato.js"></script>
+<script src="conferencia.js"></script>
+<script src="comprovantes.js"></script>
+<script src="agenda.js"></script>
 <script>
 "use strict";
 /* ════════════════════════════════════════════════════════════════════
@@ -350,7 +381,9 @@ function vazio(){
     reserva:{v:0, em:HOJE()}, itens:[{id:'mae', tipo:'mae', nome:'Cartão da mãe', v:0}],
     pagos:{}, lanc:[], objetivos:[], dicas:[], nudge:{}, onboard:null, ultForma:'cartao',
     cenario:{inicio:null, qtd:4, valor:1200, piso:null}, marcos:[],
-    regras:{}, entr:[], vistos:{}, importacoes:[] };
+    regras:{}, entr:[], vistos:{}, importacoes:[],
+    nome:'', seg:{pin:null, minutos:5, discreto:false},
+    revisoes:[], desejos:[], conferidas:{}, contestar:[], zipEm:null };
 }
 function normaliza(d){
   const b = vazio();
@@ -360,7 +393,9 @@ function normaliza(d){
   d.reserva= Object.assign({v:0, em:HOJE()}, d.reserva||{});
   d.cenario = Object.assign({inicio:null, qtd:4, valor:1200, piso:null}, d.cenario||{});
   ['itens','lanc','objetivos','dicas','marcos','entr','importacoes'].forEach(k=>{ if(!Array.isArray(d[k])) d[k]=[]; });
-  ['pagos','nudge','regras','vistos'].forEach(k=>{ if(!d[k] || typeof d[k]!=='object' || Array.isArray(d[k])) d[k] = {}; });
+  ['pagos','nudge','regras','vistos','conferidas'].forEach(k=>{ if(!d[k] || typeof d[k]!=='object' || Array.isArray(d[k])) d[k] = {}; });
+  ['revisoes','desejos','contestar'].forEach(k=>{ if(!Array.isArray(d[k])) d[k]=[]; });
+  d.seg = Object.assign({pin:null, minutos:5, discreto:false}, d.seg||{});
   if(!d.itens.some(i=>i.tipo==='mae')) d.itens.push({id:'mae', tipo:'mae', nome:'Cartão da mãe', v:0});
   d.itens.forEach(i=>{ if(!i.id) i.id=uid(); if(i.hist) i.hist.sort((a,b)=>a.de<b.de?-1:1); });
   d.lanc.forEach(l=>{ if(!l.id) l.id=uid(); if(!CAT[l.c]) l.c='outros'; });
@@ -557,8 +592,9 @@ function mudancas(){
 const CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 const GEAR  = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>';
 
-function render(){ renderView(); renderSheet(); }
+function render(){ renderView(); renderSheet(); atualizaSemComp(); }
 function renderView(){
+  document.body.classList.toggle('discreto', !!S.seg.discreto);
   const av = document.getElementById('aviso');
   av.classList.toggle('hide', STORE_OK);
   if(!STORE_OK) av.textContent = 'Este navegador não está deixando guardar dados (aba anônima?). O que você lançar some ao fechar.';
@@ -572,14 +608,198 @@ function vTopo(){
   const H = HOJE(), d = dataD(H);
   const sw = `<div class="mswitch"><button data-act="mes" data-v="-1" aria-label="Mês anterior">‹</button>
     <span>${ymRot(UI.mes)}</span><button data-act="mes" data-v="1" aria-label="Próximo mês">›</button></div>`;
-  const tit = {painel:'Painel', mes:'Mês', cartoes:'Cartões', futuro:'Futuro'}[UI.tab];
+  const tit = {painel: S.nome ? 'Oi, '+esc(S.nome) : 'Painel', mes:'Mês', cartoes:'Cartões', futuro:'Futuro'}[UI.tab];
   const sub = UI.tab==='painel' ? `${DSEM[d.getDay()]}, ${d.getDate()} de ${mesNome(H)}`
     : UI.tab==='futuro' ? 'reserva e próximos meses'
     : UI.tab==='cartoes' ? 'fatura que vence em '+mesNome(UI.mes)
     : (UI.mes===MES() ? 'mês atual' : UI.mes < MES() ? 'mês que passou' : ymDiff(UI.mes,MES())===1 ? 'mês que vem' : 'previsão');
   return `<h1>${tit}<span class="sub">${esc(sub)}</span></h1>
     ${UI.tab==='mes'||UI.tab==='cartoes' ? sw : ''}
+    <button class="ico" data-act="discreto" aria-label="${S.seg.discreto?'Mostrar valores':'Esconder valores'}" aria-pressed="${!!S.seg.discreto}">${S.seg.discreto?OLHO_F:OLHO}</button>
     <button class="ico" data-act="ajustes" aria-label="Ajustes">${GEAR}</button>`;
+}
+const OLHO   = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const OLHO_F = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l18 18M10.6 6.1A10.7 10.7 0 0112 6c6.4 0 10 6 10 6a17 17 0 01-3.2 3.9M6.6 7.6C3.8 9.4 2 12 2 12s3.6 6 10 6c1.6 0 3-.4 4.3-1"/><path d="M9.9 10a3 3 0 004.1 4.1"/></svg>';
+
+/* ══════════════════ cadeado (PIN) e modo discreto ══════════════════
+   O PIN não fica salvo: só um hash PBKDF2 (com sal) dele. É um cadeado de
+   privacidade para quem pegar o celular desbloqueado, não criptografia. */
+const hexDe = buf => [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+async function hashPin(pin, sal){
+  const enc = new TextEncoder();
+  const k = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveBits']);
+  return hexDe(await crypto.subtle.deriveBits({name:'PBKDF2', hash:'SHA-256', salt:enc.encode(sal), iterations:150000}, k, 256));
+}
+const CAD = {travado:false, digitado:'', erros:0, esperaAte:0, fora:null, msg:'', esqueci:false};
+const temPin = () => !!(S.seg.pin && S.seg.pin.hash && window.crypto && crypto.subtle);
+function travar(){ if(!temPin()) return; Object.assign(CAD, {travado:true, digitado:'', msg:'', esqueci:false}); renderCadeado(); }
+function renderCadeado(){
+  const el = document.getElementById('cadeado'), shell = document.getElementById('shell');
+  if(!CAD.travado){ el.classList.add('hide'); el.innerHTML = ''; shell.removeAttribute('aria-hidden'); return; }
+  shell.setAttribute('aria-hidden','true'); el.classList.remove('hide');
+  const n = S.seg.pin.n || 4;
+  el.innerHTML = `<div class="cad">
+    <div class="big" style="font-size:30px">${S.nome ? 'Oi, '+esc(S.nome) : 'Financeiro'}</div>
+    <div class="small mut2" style="margin-top:4px">Digite seu PIN</div>
+    <div class="pontos${CAD.msg?' treme':''}" aria-live="polite" aria-label="${CAD.digitado.length} de ${n} dígitos">${Array.from({length:n},(_,i)=>`<i class="${i<CAD.digitado.length?'on':''}"></i>`).join('')}</div>
+    <div class="small warn" style="min-height:22px">${esc(CAD.msg)}</div>
+    <div class="keys" style="width:100%;max-width:300px">${['1','2','3','4','5','6','7','8','9','','0','⌫'].map(t=>t?`<button data-act="pin-tecla" data-v="${t}" aria-label="${t==='⌫'?'apagar':t}">${t}</button>`:'<span></span>').join('')}</div>
+    <button class="limpo lnk" data-act="pin-esqueci" style="margin-top:18px">esqueci o PIN</button>
+    ${CAD.esqueci?`<div class="nota" style="margin-top:12px;text-align:left">${S.seg.pin.dica?`<div style="margin-bottom:6px">Sua dica: <b>${esc(S.seg.pin.dica)}</b></div>`:''}
+      <div class="small mut2">Sem o PIN, o jeito é apagar os dados deste aparelho e importar o último backup (.json).</div>
+      <button class="btn sm blk dng" data-act="pin-apagar" style="margin-top:10px">Apagar os dados deste aparelho</button></div>`:''}
+  </div>`;
+}
+async function teclaPin(t){
+  if(Date.now() < CAD.esperaAte){ CAD.msg = 'Espere alguns segundos e tente de novo.'; renderCadeado(); return; }
+  const n = S.seg.pin.n || 4;
+  if(t==='⌫') CAD.digitado = CAD.digitado.slice(0,-1);
+  else if(/^\d$/.test(t) && CAD.digitado.length < n) CAD.digitado += t;
+  CAD.msg = '';
+  if(CAD.digitado.length === n){
+    const ok = (await hashPin(CAD.digitado, S.seg.pin.sal)) === S.seg.pin.hash;
+    if(ok){ Object.assign(CAD, {travado:false, digitado:'', erros:0}); renderCadeado(); render(); return; }
+    CAD.erros++; CAD.digitado = '';
+    if(CAD.erros >= 5){ CAD.esperaAte = Date.now() + 30000; CAD.erros = 0; CAD.msg = 'Muitas tentativas. Espere 30 segundos.'; }
+    else CAD.msg = 'PIN errado.';
+    if(navigator.vibrate) try{ navigator.vibrate([40,40,40]); }catch(_){}
+  }
+  renderCadeado();
+}
+function shPin(){
+  const P = UI.pin;
+  return `<div class="sh-hd"><h2>Cadeado</h2><button class="x" data-act="fechar">fechar</button></div>
+  <div class="small mut2" style="margin-bottom:12px">Pede um PIN ao abrir o app e depois de um tempo fora dele. Protege de quem pegar o celular desbloqueado.</div>
+  <div class="row2">
+    <label class="fld"><span>Novo PIN (4 a 6 números)</span><input class="inp n" id="p-1" inputmode="numeric" type="password" maxlength="6" autocomplete="new-password"></label>
+    <label class="fld"><span>Repita</span><input class="inp n" id="p-2" inputmode="numeric" type="password" maxlength="6" autocomplete="new-password"></label>
+  </div>
+  <label class="fld"><span>Dica pra lembrar (opcional, aparece em “esqueci”)</span><input class="inp" id="p-dica" maxlength="60" autocomplete="off" value="${esc(P.dica||'')}"></label>
+  <div class="fld"><span>Trancar depois de quanto tempo fora do app</span><div class="chips">${[1,5,15,60].map(m=>`<button class="chip${P.minutos===m?' on':''}" data-act="p-min" data-v="${m}" style="flex:1">${m<60?m+' min':'1 h'}</button>`).join('')}</div></div>
+  <button class="btn pri blk" data-act="p-salvar" style="min-height:50px;margin-top:6px">${temPin()?'Trocar PIN':'Ligar cadeado'}</button>
+  ${temPin()?`<button class="btn ghost blk dng" data-act="p-tirar" style="margin-top:6px">Desligar cadeado</button>`:''}`;
+}
+
+
+/* ══════════════════ “Agora”: só o próximo passo ══════════════════
+   Pensado para TDAH: no topo do painel, no máximo 3 coisas, cada uma com
+   um botão que resolve. O resto do painel é contexto. */
+function agoraItens(){
+  const H = HOJE(), M = MES(), hj = +H.slice(8,10), it = [];
+  const cs = contasDoMes(M);
+  cs.filter(c=>!resolvida(c,M) && c.dia).forEach(c=>{
+    const d = Math.min(c.dia, diasMes(M)) - hj;
+    if(d <= 3) it.push({p: d < 0 ? 0 : 1 + d, alerta: d <= 0, t:c.nome, v:c.v,
+      sub: d < 0 ? 'venceu dia '+c.dia : d===0 ? 'vence hoje' : d===1 ? 'vence amanhã' : 'vence em '+d+' dias',
+      bt:'Paguei', attr:`data-act="pagar" data-id="${c.id}" data-m="${M}"`});
+  });
+  S.desejos.filter(d=>!d.fim && Date.now() - d.em >= 48*3600e3).forEach(d=>it.push({p:4, t:'Ainda quer '+d.n+'?', v:d.v,
+    sub:'já esperou '+Math.floor((Date.now()-d.em)/3600e3)+' h', bt:'Decidir', attr:`data-act="desejo" data-id="${d.id}"`}));
+  const fat = cs.find(c=>c.fatura);
+  if(fat && !S.conferidas[M] && window.Conferencia) it.push({p:5, t:'Conferir a fatura de '+mesNome(M),
+    sub:'o app checa cada cobrança com você', bt:'Conferir', attr:'data-act="conf"'});
+  if(UI.semComp && UI.semComp.n) it.push({p:6, t:UI.semComp.n+(UI.semComp.n>1?' contas pagas':' conta paga')+' sem comprovante',
+    sub:'guarde agora: leva 10 segundos cada', bt:'Guardar', attr:'data-act="comp"'});
+  const ult = S.revisoes[S.revisoes.length-1];
+  if(!ult || diasEntre(H, ult) >= 7) it.push({p:7, t:'Revisão de 5 minutos', sub: ult ? 'a última foi há '+diasEntre(H, ult)+' dias' : 'um passo de cada vez',
+    bt:'Começar', attr:'data-act="rev"'});
+  if(S.importacoes.length && window.Comprovantes){
+    const z = S.zipEm ? diasEntre(H, S.zipEm) : 999;
+    if(z >= 30 && UI.compUso && UI.compUso.n) it.push({p:8, t:'Backup dos comprovantes', sub:'estão só neste celular', bt:'Baixar', attr:'data-act="comp-zip"'});
+  }
+  if(!S.agendaEm && window.Agenda && contasDoMes(M).some(c=>c.dia && !c.auto))
+    it.push({p:9, t:'Lembretes no calendário', sub:'o celular avisa antes de cada conta vencer', bt:'Criar', attr:'data-act="agenda"'});
+  return it.sort((a,b)=>a.p-b.p);
+}
+function cardAgora(){
+  const it = agoraItens();
+  if(!it.length){
+    const st = sequencia();
+    return `<div class="card agora feito"><div class="lbl">agora</div>
+      <div style="font-weight:600;font-size:17px;margin-top:4px">Tudo em dia ✓</div>
+      <div class="small mut2">Nada urgente.${st>1?` Revisões feitas ${st} semanas seguidas.`:''} Pode viver tranquilo.</div></div>`;
+  }
+  const mostra = UI.agoraTudo ? it : it.slice(0,3);
+  return `<div class="card flush agora"><div class="hd" style="padding:14px 16px 0;margin-bottom:2px"><span class="lbl">agora</span>
+      <span class="tiny mut">${it.length===1?'1 coisa':it.length+' coisas'}</span></div>
+    <div class="rows">${mostra.map(x=>`<div class="r" style="gap:10px">
+      <span class="tx"><b${x.alerta?' class="warn"':''}>${esc(x.t)}</b><span>${esc(x.sub)}${x.v?' · '+brl(x.v,0):''}</span></span>
+      <button class="btn sm pri" ${x.attr}>${x.bt}</button></div>`).join('')}</div>
+    ${it.length>3?`<button class="limpo lnk" data-act="agora-tudo" style="padding:10px 16px 12px;display:block">${UI.agoraTudo?'mostrar menos':'mais '+(it.length-3)}</button>`:''}
+  </div>`;
+}
+// semanas seguidas com revisão (a semana atual conta se já foi feita; senão começa pela passada)
+function semanaDe(d){ const x = dataD(d); x.setDate(x.getDate() - ((x.getDay()+6)%7)); return iso(x); }
+function sequencia(){
+  const sem = new Set(S.revisoes.map(semanaDe));
+  let w = semanaDe(HOJE()), n = 0;
+  if(!sem.has(w)) w = addDia(w,-7);
+  while(sem.has(w)){ n++; w = addDia(w,-7); }
+  return n;
+}
+
+/* revisão de 5 minutos: um passo por tela */
+function shRev(){
+  const R = UI.rev, H = HOJE(), M = MES(), passos = 4;
+  const topo = `<div class="sh-hd"><h2>Revisão de 5 min</h2><button class="x" data-act="fechar">fechar</button></div>
+    <div class="passos" aria-label="passo ${R.p} de ${passos}">${Array.from({length:passos},(_,i)=>`<i class="${i<R.p?'on':''}"></i>`).join('')}</div>`;
+  const prox = (txt='Próximo') => `<button class="btn pri blk" data-act="rev-prox" style="min-height:52px;margin-top:14px">${txt}</button>`;
+  if(R.p===1){
+    const L = S.lanc.filter(l=>l.d > addDia(H,-7) && l.d <= H), tot = L.reduce((s,l)=>s+(+l.v||0),0);
+    return topo + `<div class="big" style="font-size:24px;margin:6px 0">1. Lançou tudo da semana?</div>
+      <div class="small mut2">Nos últimos 7 dias: <b>${L.length} gastos, ${brl(tot,0)}</b>. Se faltou algo, lance agora ou importe o extrato.</div>
+      <div class="btns" style="margin-top:12px"><button class="btn" data-act="rev-lancar">+ Lançar</button><button class="btn" data-act="ext">Importar extrato</button></div>
+      ${prox('Está tudo aí')}`;
+  }
+  if(R.p===2){
+    const cs = contasDoMes(M).filter(c=>!resolvida(c,M) && (!c.dia || c.dia - +H.slice(8,10) <= 7));
+    return topo + `<div class="big" style="font-size:24px;margin:6px 0">2. Contas dos próximos 7 dias</div>
+      ${cs.length?`<div class="card flush"><div class="rows">${cs.map(c=>linhaConta(c,M)).join('')}</div></div>
+        <div class="tiny mut" style="margin-top:6px">Toque no círculo quando pagar.</div>`
+      :'<div class="nota">Nenhuma conta pra esta semana. ✓</div>'}
+      ${prox()}`;
+  }
+  if(R.p===3){
+    const falta = UI.semComp ? UI.semComp.lista : [];
+    return topo + `<div class="big" style="font-size:24px;margin:6px 0">3. Comprovantes</div>
+      ${!window.Comprovantes?'<div class="nota">O cofre de comprovantes não carregou.</div>'
+      : falta.length?`<div class="small mut2" style="margin-bottom:8px">Contas pagas sem comprovante guardado:</div>
+        <div class="card flush"><div class="rows">${falta.map(c=>`<div class="r"><span class="tx"><b>${esc(c.nome)}</b><span>${esc(c.quando||'')}</span></span>
+          <button class="btn sm" data-act="comp-add" data-ref="${c.id}" data-m="${c.m}">Anexar</button></div>`).join('')}</div></div>`
+      :'<div class="nota">Todos os comprovantes do mês guardados. ✓</div>'}
+      ${prox()}`;
+  }
+  const r0 = reservaInicio(), PJ = projecao(4), alvo = PJ[3], piso = +S.cenario.piso||0;
+  const folga = piso ? Math.min(...PJ.map(p=>p.r)) - piso : null;
+  return topo + `<div class="big" style="font-size:24px;margin:6px 0">4. Como está</div>
+    <div class="card"><div class="small mut2">Reserva hoje</div><div class="big" style="font-size:32px">${brl(r0,0)}</div>
+      <div class="small mut2" style="margin-top:8px">Fim de ${mesNome(alvo.m)}</div><div class="big" style="font-size:26px">${sbrl(alvo.r,0)}</div>
+      ${folga!=null?`<div class="small" style="margin-top:8px">${folga>=0?`Livre pra aproveitar: <b class="ok">${brl(folga,0)}</b>`:`<b class="warn">${brl(-folga,0)} abaixo do piso</b>`}</div>`:''}</div>
+    ${prox('Concluir revisão')}`;
+}
+
+/* quero comprar: espera de 48 h antes de comprar por impulso */
+function shDesejo(){
+  const d = S.desejos.find(x=>x.id===UI.ed); if(!d) return '';
+  const h = Math.floor((Date.now()-d.em)/3600e3), pronto = h >= 48;
+  const piso = +S.cenario.piso||0, PJ = projecao(4), folga = piso ? Math.min(...PJ.map(p=>p.r)) - piso : null;
+  return `<div class="sh-hd"><h2>${esc(d.n)}</h2><button class="x" data-act="fechar">fechar</button></div>
+    <div class="big" style="font-size:40px">${brl(d.v,0)}</div>
+    <div class="small mut2" style="margin:6px 0 12px">${pronto?`Esperou ${h} horas. Ainda faz sentido?`:`Faltam ${48-h} h pra decidir. Se a vontade passar, ótimo; se não, compre sem culpa.`}</div>
+    ${folga!=null?`<div class="nota" style="margin-bottom:12px">Livre pra aproveitar até ${ymRot(PJ[3].m)}: ${brl(folga,0)} → <b>${sbrl(folga - d.v,0)}</b> se comprar.</div>`:''}
+    <div class="btns"><button class="btn" data-act="desejo-nao">Desisti</button><button class="btn pri" data-act="desejo-sim">Comprar</button></div>
+    <button class="btn ghost blk" data-act="desejo-apagar" style="margin-top:6px">Tirar da lista</button>`;
+}
+function cardDesejos(){
+  const ab = S.desejos.filter(d=>!d.fim), salvo = S.desejos.filter(d=>d.fim==='desisti').reduce((s,d)=>s+(+d.v||0),0);
+  return `<div class="card flush">
+    <div class="hd" style="padding:14px 16px 0;margin-bottom:4px"><span class="lbl">quero comprar · espera de 48 h</span>
+      <button class="lnk" data-act="sim">+ item</button></div>
+    ${ab.length?`<div class="rows">${ab.map(d=>{ const h = Math.floor((Date.now()-d.em)/3600e3);
+      return `<button class="r" data-act="desejo" data-id="${d.id}"><span class="tx"><b>${esc(d.n)}</b><span>${h>=48?'pronto pra decidir':'decide em '+(48-h)+' h'}</span></span><span class="v">${brl(d.v,0)}</span></button>`;}).join('')}</div>`
+      :'<div class="empty">Deu vontade de comprar algo? Coloque aqui e decida daqui a 48 h. Metade das vontades passa sozinha.</div>'}
+    ${salvo?`<div class="tot"><span class="small mut2">ficou com você por desistir</span><span class="num ok" style="font-size:18px">${brl(salvo,0)}</span></div>`:''}
+  </div>`;
 }
 
 /* ─────────── PAINEL ─────────── */
@@ -629,6 +849,7 @@ function miniReserva(pts, piso){
 function vPainel(){
   if(S.novo) return vBoasVindas();
   const K = hojeCalc(), M = K.M, C = S.cenario, piso = +C.piso||0, out = avisosTopo(K);
+  out.unshift(cardAgora());
 
   // 1. a reserva agora e daqui a 3 meses
   const r0 = reservaInicio(), PJ = projecao(4), alvo = PJ[3];
@@ -828,7 +1049,7 @@ function linhaConta(c, m){
   return `<div class="r">
     <button class="chk${st.k==='pago'?' on':''}${st.k==='auto'?' auto':''}" data-act="pagar" data-id="${c.id}" data-m="${m}" aria-label="${st.k==='pago'?'Desmarcar':'Marcar como paga'}: ${esc(c.nome)}">${CHECK}</button>
     ${c.fatura?'<span class="tx">':`<button class="tx" data-act="ed-item" data-id="${c.id}" data-m="${m}" style="background:none;border:0;padding:0;text-align:left">`}
-      <b>${esc(c.nome)}</b><span><span class="pill ${pill}">${esc(st.t)}</span></span>${c.fatura?'</span>':'</button>'}
+      <b>${esc(c.nome)}</b><span><span class="pill ${pill}">${esc(st.t)}</span>${temComp(c.id,m)?' <span class="tiny ok" title="comprovante guardado">📎</span>':''}</span>${c.fatura?'</span>':'</button>'}
     <span class="v"${st.k==='pago'||st.k==='auto'?' style="color:var(--mut)"':''}>${brl(c.v)}</span></div>`;
 }
 
@@ -925,7 +1146,7 @@ function vPlano(){
 
   out.push(`<div class="card flush">
     <div class="hd" style="padding:14px 16px 0;margin-bottom:4px"><span class="lbl">contas · ${ok.length} de ${cs.length} ok</span>
-      <button class="lnk" data-act="novo-item" data-v="conta">+ conta</button></div>
+      <span style="display:flex;gap:14px"><button class="lnk" data-act="comp" data-v="${m}">📎 comprovantes</button><button class="lnk" data-act="novo-item" data-v="conta">+ conta</button></span></div>
     ${cs.length?`<div class="rows">${cs.map(c=>linhaConta(c,m)).join('')}</div>
       <div class="tot"><span class="small mut2">faltam pagar</span><span class="num" style="font-size:18px">${brl(cs.filter(c=>!resolvida(c,m)).reduce((s,c)=>s+c.v,0))}</span></div>`
       :'<div class="empty">Nenhuma conta neste mês.</div>'}
@@ -986,12 +1207,23 @@ function vCartoes(){
     ${fat?`<div style="display:flex;align-items:center;gap:10px">
       <button class="chk${st.k==='pago'?' on':''}" style="border-color:color-mix(in srgb,var(--on-hero) 45%,transparent)" data-act="pagar" data-id="fatura" data-m="${m}" aria-label="${st.k==='pago'?'Desmarcar':'Marcar fatura como paga'}">${CHECK}</button>
       <span class="small">${esc(st.k==='sem'&&!S.cartao.dia?'defina o dia de vencimento em Ajustes':st.t)}</span></div>`:''}
+    <div style="margin-top:12px">${S.conferidas[m]?`<span class="small">✓ conferida em ${ddmm(S.conferidas[m].em)}</span> <button class="limpo lnk-h" data-act="conf">conferir de novo</button>`
+      :`<button class="btn sm pri" data-act="conf">Conferir esta fatura</button>`}</div>
     <div style="border-top:1px solid color-mix(in srgb,var(--on-hero) 20%,transparent);margin:14px 0 10px"></div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
       <div><div class="tiny mut">Parcelas</div><div class="num" style="font-size:19px">${brl(tP,0)}</div></div>
       <div><div class="tiny mut">Assinaturas e compras</div><div class="num" style="font-size:19px">${brl(tF,0)}</div></div>
       <div><div class="tiny mut">Gastos lançados</div><div class="num" style="font-size:19px">${brl(tL,0)}</div></div>
     </div>
+  </div>`);
+
+  // cobranças em contestação
+  const cont = S.contestar.filter(x=>x.status==='aberta');
+  if(cont.length) out.push(`<div class="card flush">
+    <div class="hd" style="padding:14px 16px 0;margin-bottom:4px"><span class="lbl warn">pra contestar · ${cont.length}</span></div>
+    <div class="rows">${cont.map(x=>`<div class="r"><span class="tx"><b>${esc(x.t)}</b><span>${ddmm(x.d)} · fatura de ${ymRot(x.m)}</span></span>
+      <span class="v" style="font-size:16px">${brl(x.v)}</span><button class="btn sm" data-act="contest-ok" data-v="${x.id}">Resolvida</button></div>`).join('')}</div>
+    <div class="tiny mut" style="padding:8px 16px 12px">No app do cartão: fatura › toque na compra › “Não reconheço” / “Contestar”. Quando o estorno vier, marque como resolvida.</div>
   </div>`);
 
   // parcelamentos: os do cartão e os que saem da conta (boleto, carnê)
@@ -1162,6 +1394,7 @@ function vFuturo(){
     :'<div class="empty">Formatura, viagem, trocar de celular… coloque aqui, com o mês de pagar, e entra na previsão.</div>'}
   </div>`);
 
+  out.push(cardDesejos());
   out.push(`<button class="btn blk" data-act="sim" style="min-height:52px">Posso gastar isso?</button>`);
   return out.join('');
 }
@@ -1170,9 +1403,9 @@ function vFuturo(){
 function renderSheet(){
   const bd = document.getElementById('backdrop'), sh = document.getElementById('sheet');
   if(!UI.sheet){ bd.classList.remove('on','full'); sh.innerHTML=''; document.body.style.overflow=''; return; }
-  bd.classList.add('on'); bd.classList.toggle('full', UI.sheet==='ajustes' || UI.sheet==='ext');
+  bd.classList.add('on'); bd.classList.toggle('full', ['ajustes','ext','comp','conf'].includes(UI.sheet));
   document.body.style.overflow='hidden';
-  const f = {add:shAdd, item:shItem, reserva:shReserva, sim:shSim, ajustes:shAjustes, obj:shObj, imp:shImp, cen:shCen, ext:shExt}[UI.sheet];
+  const f = {add:shAdd, item:shItem, reserva:shReserva, sim:shSim, ajustes:shAjustes, obj:shObj, imp:shImp, cen:shCen, ext:shExt, pin:shPin, rev:shRev, desejo:shDesejo, comp:shComp, compqual:shCompQual, conf:shConf}[UI.sheet];
   sh.innerHTML = f ? f() : '';
 }
 function abrir(s){ UI.sheet = s; UI.conf = null; renderSheet(); document.getElementById('sheet').scrollTop = 0; }
@@ -1264,6 +1497,7 @@ function salvarLanc(){
   } else {
     S.lanc.push({id:uid(), d:A.d, v, c:A.c, f:A.f, t:A.t});
     S.ultForma = A.f; save(); fechar(); render(); toast(brl(v)+' em '+CAT[A.c].n, true);
+    if(UI.depois){ const f = UI.depois; UI.depois = null; f(); }
   }
 }
 
@@ -1399,7 +1633,11 @@ function shSim(){
   <div class="small mut2" style="margin-bottom:10px">Primeiro sai do que resta de outros gastos do mês; o resto sai da reserva.</div>
   <label class="fld"><span>Valor</span><input class="inp n" id="s-v" inputmode="decimal" value="${fmtIn(UI.sim)}" style="font-size:28px"></label>
   <input id="s-r" type="range" min="50" max="10000" step="50" value="${Math.min(UI.sim,10000)}" style="width:100%;accent-color:var(--acc);margin:0 0 12px" aria-label="Valor">
-  <div id="sim-out">${simOut()}</div>`;
+  <div id="sim-out">${simOut()}</div>
+  <div class="lbl" style="margin:16px 0 6px">ou espere 48 h antes de decidir</div>
+  <div class="row2"><input class="inp" id="s-nome" placeholder="o que é? ex.: tênis, show" autocomplete="off" style="flex:1.6">
+    <button class="btn" data-act="desejo-novo" style="flex:1">Esperar 48 h</button></div>
+  <div class="tiny mut" style="margin-top:6px">Vai pra lista “Quero comprar”. Daqui a 48 h o app pergunta se ainda quer.</div>`;
 }
 /* objetivos */
 function shObj(){
@@ -1691,6 +1929,317 @@ const COMO_EXPORTAR = `<p><b>Nubank:</b> conta: no app, ícone de engrenagem/per
 <p><b>C6, PicPay, Mercado Pago:</b> extrato em PDF ou CSV na área de extrato/relatórios.</p>
 <p>Se o banco só der PDF, funciona também. Se nada der certo, copie o texto do extrato e cole aqui embaixo.</p>`;
 
+/* ══════════════════ comprovantes (cofre no aparelho) ══════════════════
+   Os arquivos ficam no IndexedDB deste celular (comprovantes.js). Cada um
+   aponta para o que pagou: o id da conta do plano, 'fatura', ou 'avulso'. */
+const vibrar = (ms=15) => { if(navigator.vibrate) try{ navigator.vibrate(ms); }catch(_){} };
+let semCompT = null;
+function atualizaSemComp(ja){
+  if(!window.Comprovantes) return;
+  clearTimeout(semCompT);
+  semCompT = setTimeout(async ()=>{
+    try{
+      const meses = [...new Set([MES(), UI.mes, ymAdd(MES(),-1)])], refs = {};
+      for(const m of meses) refs[m] = new Set((await Comprovantes.listar({mes:m})).map(r=>r.ref));
+      const M = MES();
+      const lista = [M, ymAdd(M,-1)].flatMap(m=>contasDoMes(m).filter(c=>status(c,m).k==='pago' && !refs[m].has(c.id))
+        .map(c=>({id:c.id, nome:c.nome + (m===M?'':' ('+ymRot(m)+')'), m, quando:'pago '+(c.pago===true?'':ddmm(c.pago))})));
+      const uso = await Comprovantes.uso();
+      const antes = JSON.stringify([UI.semComp && UI.semComp.n, UI.compUso && UI.compUso.n, Object.keys(UI.compRefs||{}).map(k=>[k,[...UI.compRefs[k]].length])]);
+      UI.semComp = {n:lista.length, lista}; UI.compUso = uso; UI.compRefs = refs;
+      const depois = JSON.stringify([UI.semComp.n, uso.n, Object.keys(refs).map(k=>[k,[...refs[k]].length])]);
+      if(antes !== depois){ renderView(); if(UI.sheet==='rev') renderSheet(); }
+    }catch(e){ console.warn('comprovantes', e); }
+  }, ja ? 0 : 250);
+}
+const temComp = (id, m) => !!(UI.compRefs && UI.compRefs[m] && UI.compRefs[m].has(id));
+function pedirComprovante(ref, m){
+  if(!window.Comprovantes){ toast('O cofre de comprovantes não carregou'); return; }
+  UI.compAlvo = {ref, m}; document.getElementById('i-comp').click();
+}
+async function anexar(file, alvo){
+  let info = {valor:null, data:null, nomes:[], texto:''};
+  try{ info = await Comprovantes.lerInfo(file); }catch(_){}
+  if(!alvo.ref){
+    const cands = contasDoMes(alvo.m).map(c=>({ref:c.id, nome:c.nome, v:c.v, mes:alvo.m, dia:c.dia}));
+    const sug = Comprovantes.sugerir(info, cands) || [];
+    UI.compNovo = {file, info, m:alvo.m, sug, ref: sug.length ? sug[0].ref : null};
+    abrir('compqual'); return;
+  }
+  await salvarComp(file, alvo.ref, alvo.m, info);
+}
+async function salvarComp(file, ref, m, info){
+  const c = contasDoMes(m).find(x=>x.id===ref);
+  try{
+    await Comprovantes.salvar(file, {ref, mes:m, nome: c ? c.nome : (ref==='avulso' ? (file.name||'Comprovante') : ref),
+      valor: info && info.valor!=null ? info.valor : undefined, data: info && info.data ? info.data : undefined});
+  }catch(e){ toast((e && e.message) || 'Não deu pra guardar o arquivo'); return; }
+  if(c && !resolvida(c,m)){ snap(); (S.pagos[m] = S.pagos[m]||{})[ref] = (info && info.data) || HOJE(); save(); }
+  vibrar(); toast('Comprovante guardado ✓' + (c ? ' · ' + c.nome : ''));
+  if(UI.sheet==='compqual') fechar();
+  render(); atualizaSemComp(true);
+  if(UI.sheet==='comp') carregarCofre();
+}
+function shCompQual(){
+  const N = UI.compNovo, i = N.info || {};
+  const cs = contasDoMes(N.m), sugIds = new Set((N.sug||[]).map(s=>s.ref));
+  const ordem = cs.slice().sort((a,b)=>(sugIds.has(b.id)?1:0)-(sugIds.has(a.id)?1:0));
+  return `<div class="sh-hd"><h2>Comprovante de quê?</h2><button class="x" data-act="fechar">cancelar</button></div>
+    <div class="small mut2" style="margin-bottom:10px">${i.valor!=null||i.data?`Li no arquivo: <b>${i.valor!=null?brl(i.valor):''}</b>${i.data?' em '+ddmm(i.data):''}${(i.nomes||[]).length?' · '+esc(i.nomes[0]):''}.`:'Não deu pra ler o valor (foto). Escolha a conta:'}</div>
+    <div class="chips">${ordem.map(c=>`<button class="chip${N.ref===c.id?' on':''}" data-act="compqual-ref" data-v="${c.id}">${esc(c.nome)} · ${brl(c.v,0)}${sugIds.has(c.id)&&N.sug[0].ref===c.id?' ★':''}</button>`).join('')}
+      <button class="chip${N.ref==='avulso'?' on':''}" data-act="compqual-ref" data-v="avulso">Outra coisa</button></div>
+    <button class="btn pri blk" data-act="compqual-ok" style="min-height:50px;margin-top:14px"${N.ref?'':' disabled'}>Guardar</button>`;
+}
+async function carregarCofre(){
+  const m = UI.compMes;
+  try{ UI.compLista = await Comprovantes.listar({mes:m}); UI.compUso = await Comprovantes.uso(); }
+  catch(e){ UI.compLista = []; UI.compErro = (e && e.message) || 'erro'; }
+  if(UI.sheet==='comp') renderSheet();
+}
+function abrirCofre(m){ UI.compMes = m || MES(); UI.compLista = null; abrir('comp'); carregarCofre(); }
+function shComp(){
+  const m = UI.compMes, L = UI.compLista;
+  const hd = `<div class="sh-hd"><h2>Comprovantes</h2><button class="x" data-act="fechar">✕ fechar</button></div>
+    <div class="mswitch" style="justify-content:center;margin-bottom:10px"><button data-act="comp-mes" data-v="-1" aria-label="Mês anterior">‹</button>
+      <span>${ymRot(m)}</span><button data-act="comp-mes" data-v="1" aria-label="Próximo mês">›</button></div>`;
+  if(!window.Comprovantes) return hd + '<div class="nota warn-n">O cofre de comprovantes não carregou. Abra o app com internet uma vez.</div>';
+  if(!L) return hd + '<div class="empty">Abrindo o cofre…</div>';
+  const cs = contasDoMes(m), porRef = {};
+  L.forEach(r=>{ (porRef[r.ref] = porRef[r.ref] || []).push(r); });
+  const linhaArq = r => `<div class="arq">
+      ${r.miniatura?`<img src="${r.miniatura}" alt="" class="thumb">`:`<span class="thumb pdf">PDF</span>`}
+      <span class="tx"><b>${esc(r.nome||'Comprovante')}</b><span>${r.valor!=null?brl(r.valor)+' · ':''}${r.data?ddmm(r.data):ddmm(r.criado.slice(0,10))}</span></span>
+      <button class="btn sm" data-act="comp-ver" data-v="${r.id}">Ver</button>
+      <button class="x" data-act="comp-apagar" data-v="${r.id}" aria-label="Apagar comprovante" style="font-size:20px;color:var(--mut)">${UI.conf==='apagar:'+r.id?'<span class="warn" style="font-size:13px">apagar?</span>':'×'}</button></div>`;
+  const pagas = cs.filter(c=>status(c,m).k==='pago'), ok = pagas.filter(c=>porRef[c.id]).length;
+  const avulsos = L.filter(r=>!cs.some(c=>c.id===r.ref));
+  return hd + `
+    <div class="small mut2" style="margin-bottom:10px">${pagas.length?`${ok} de ${pagas.length} contas pagas com comprovante.`:'Nenhuma conta paga neste mês ainda.'} Ficam guardados só neste celular.</div>
+    <div class="card flush"><div class="rows">${cs.map(c=>{
+      const st = status(c,m), arqs = porRef[c.id] || [];
+      return `<div style="padding:10px 16px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="tx" style="flex:1;min-width:0"><b style="font-weight:500">${esc(c.nome)}</b>
+            <span class="tiny ${arqs.length?'ok':st.k==='pago'?'warn':'mut'}" style="display:block">${arqs.length?'✓ comprovante guardado':st.k==='pago'?'paga, sem comprovante':esc(st.t)}</span></span>
+          <span class="num" style="font-size:16px">${brl(c.v,0)}</span>
+          <button class="btn sm${!arqs.length&&st.k==='pago'?' pri':''}" data-act="comp-add" data-ref="${c.id}" data-m="${m}">${arqs.length?'+':'Anexar'}</button></div>
+        ${arqs.map(linhaArq).join('')}</div>`;}).join('')}</div></div>
+    ${avulsos.length?`<div class="lbl" style="margin:14px 0 6px">outros comprovantes</div><div class="card flush" style="padding:6px 16px">${avulsos.map(linhaArq).join('')}</div>`:''}
+    <button class="btn blk" data-act="comp-novo" style="margin-top:12px">+ Guardar outro comprovante</button>
+    <div class="lbl" style="margin:18px 0 6px">backup</div>
+    <div class="small mut2" style="margin-bottom:8px">${UI.compUso?`${UI.compUso.n} arquivo${UI.compUso.n===1?'':'s'}, ${(UI.compUso.bytes/1048576).toLocaleString('pt-BR',{maximumFractionDigits:1})} MB. `:''}Se trocar de celular ou limpar o navegador, eles somem. Baixe o .zip de vez em quando e guarde no Drive.${S.zipEm?` Último backup: ${ddmm(S.zipEm)}.`:''}</div>
+    <button class="btn blk" data-act="comp-zip">Baixar todos (.zip)</button>`;
+}
+function baixarBlob(nome, blob){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nome;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 10000);
+}
+async function verComp(id){
+  const r = await Comprovantes.obter(id); if(!r){ toast('Não achei esse arquivo'); return; }
+  const url = URL.createObjectURL(r.blob);
+  const w = window.open(url, '_blank');
+  if(!w) baixarBlob((r.registro.nome||'comprovante').replace(/[^\w.-]+/g,'_') + (/pdf/.test(r.registro.tipo)?'.pdf':'.jpg'), r.blob);
+  setTimeout(()=>URL.revokeObjectURL(url), 60000);
+}
+// arquivos compartilhados com o app (Android: “Compartilhar › Financeiro”), guardados pelo sw.js
+async function pegarCompartilhados(){
+  if(!/[?&]compartilhado=1/.test(location.search) || !('caches' in window)) return;
+  history.replaceState(null, '', location.pathname);
+  try{
+    const c = await caches.open('financeiro-compartilhado'), ks = await c.keys();
+    for(const k of ks){ const res = await c.match(k); await c.delete(k);
+      if(res){ const blob = await res.blob(); const nome = decodeURIComponent(res.headers.get('X-Nome')||'comprovante');
+        await anexar(new File([blob], nome, {type:blob.type}), {m:MES()}); } }
+  }catch(e){ toast('Não deu pra abrir o arquivo compartilhado'); }
+}
+
+/* ══════════════════ conferir a fatura do cartão ══════════════════
+   conferencia.js compara cada cobrança com o plano (assinaturas, parcelas)
+   e com o que foi lançado à mão. Aqui a pessoa decide só o que precisa,
+   um cartão de cada vez. */
+function abrirConf(){ UI.cf = {etapa:'arquivo', avisos:[], dec:{}, i:0}; abrir('conf'); }
+async function lerFatura(files){
+  const F = UI.cf; F.carregando = true; renderSheet();
+  const ano = +HOJE().slice(0,4);
+  try{
+    const f = files[0], bytes = new Uint8Array(await f.arrayBuffer());
+    const pdf = /\.pdf$/i.test(f.name) || (bytes[0]===0x25 && bytes[1]===0x50 && bytes[2]===0x44 && bytes[3]===0x46);
+    const r = pdf ? Extrato.lerTexto(await textoDoPDF(bytes), {ano, conta:'cartao'}) : Extrato.ler(Extrato.decodificar(bytes), f.name, {ano});
+    prepararFatura(r, f.name);
+  }catch(e){ F.avisos.push((e && e.message) || 'Não deu pra ler o arquivo'); }
+  F.carregando = false; renderSheet();
+}
+function prepararFatura(r, nome){
+  const F = UI.cf;
+  if(!(r.transacoes||[]).length){ F.avisos.push('Não achei cobranças nesse arquivo.' + ((r.avisos||[]).length ? ' (' + r.avisos.join('; ') + ')' : '')); return; }
+  if(r.conta==='corrente') F.avisos.push('Esse arquivo parece extrato da conta, não fatura. Se for a conta, use “Importar extrato”.');
+  const venc = r.referencia && r.referencia.vencimento;
+  const cont = {}; r.transacoes.filter(t=>t.valor<0).forEach(t=>{ const mm = mesDaFatura(t.dataCompra||t.data); cont[mm] = (cont[mm]||0)+1; });
+  const moda = Object.entries(cont).sort((a,b)=>b[1]-a[1])[0];
+  Object.assign(F, {r, nome, m: venc ? venc.slice(0,7) : moda ? moda[0] : MES(), etapa:'mes'});
+}
+function rodarConf(){
+  const F = UI.cf, m = F.m;
+  const esperados = plano(m).cart.map(x=>({id:x.it.id, nome:x.it.nome, v:x.v,
+    tipo: x.it.n ? 'parcela' : (x.it.ate && x.it.de===x.it.ate ? 'compra' : 'assinatura'), k: x.it.n ? parcK(x.it,m) : undefined, n: x.it.n || undefined}));
+  const lancados = lancFatura(m).map(l=>({id:l.id, d:l.d, v:+l.v, t:l.t || CAT[l.c].n}));
+  F.rel = Conferencia.conferir({transacoes:F.r.transacoes, classificar: t=>Extrato.classificar(t, S.regras), chave:Extrato.chave,
+    esperados, lancados, totalImpresso: F.r.referencia ? F.r.referencia.total : null});
+  // fila: só o que precisa de decisão ou aviso, na ordem que mais importa
+  const R = F.rel, fila = [];
+  R.duplicadas.forEach(x=>fila.push({tipo:'dup', a:x.a, b:x.b}));
+  const duvida = [], certos = [];
+  R.naoReconhecidos.forEach(x=>((x.c && x.c.confianca==='palpite') || !CAT[x.c && x.c.cat] ? duvida : certos).push(x));
+  duvida.forEach(x=>fila.push({tipo:'rec', t:x.t, c:x.c}));
+  if(certos.length) fila.push({tipo:'lote', itens:certos});
+  R.valorMudou.forEach(x=>fila.push({tipo:'valor', t:x.t, e:x.esperado, d:x.diferenca}));
+  R.assinaturasNovas.forEach(x=>fila.push({tipo:'ass', t:x.t}));
+  R.parcelasNovas.forEach(x=>fila.push({tipo:'parc', t:x.t}));
+  R.faltando.forEach(x=>fila.push({tipo:'falta', e:x.esperado}));
+  R.lancadosFaltando.forEach(x=>fila.push({tipo:'lfalta', l:x.lancado}));
+  if(R.diferencaTotal != null && Math.abs(R.diferencaTotal) > 1) fila.push({tipo:'total'});
+  Object.assign(F, {fila, i:0, etapa: fila.length ? 'cartas' : 'fim', dec:{}});
+}
+const chaveDec = c => c.tipo==='dup' ? 'dup:'+c.a.id+':'+c.b.id : c.tipo==='lote' ? 'lote' : (c.t ? c.tipo+':'+c.t.id : c.tipo+':'+(c.e?c.e.id:c.l?c.l.id:''));
+function linhaT(t){ return `<div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+  <span><b style="font-weight:600">${esc(t.desc)}</b><span class="tiny mut" style="display:block">${ddmm(t.dataCompra||t.data)}${t.parcela?' · parcela '+t.parcela.k+'/'+t.parcela.n:''}</span></span>
+  <span class="num" style="font-size:20px">${t.valor>0?'+':''}${brl(Math.abs(t.valor))}</span></div>`; }
+function shConf(){
+  const F = UI.cf;
+  const hd = `<div class="sh-hd"><h2>Conferir fatura</h2><button class="x" data-act="fechar">✕ fechar</button></div>`;
+  const avisos = F.avisos.length ? `<div class="nota warn-n" style="margin:10px 0">${F.avisos.map(esc).join('<br>')}</div>` : '';
+  if(!window.Extrato || !window.Conferencia) return hd + '<div class="nota warn-n">O conferidor não carregou. Abra o app com internet uma vez.</div>';
+  if(F.carregando) return hd + '<div class="empty">Lendo a fatura…</div>';
+  if(F.etapa==='arquivo') return hd + `
+    <div class="small mut2" style="margin-bottom:12px">Baixe a fatura no app do cartão (CSV, OFX ou PDF) e escolha aqui. O app compara cada cobrança com o seu plano e com o que você lançou, e só pergunta o que precisar.</div>
+    <button class="btn pri blk" data-act="cf-arq" style="min-height:52px">Escolher a fatura</button>
+    ${avisos}
+    <div class="lbl" style="margin:16px 0 6px">ou cole o texto da fatura</div>
+    <textarea class="txt" id="cf-txt" placeholder="19 OUT  IFOOD *RESTAURANTE  42,50&#10;21 OUT  LOJA X  PARCELA 2/3  66,67"></textarea>
+    <button class="btn blk" data-act="cf-ler" style="margin-top:8px">Ler texto colado</button>`;
+  if(F.etapa==='mes'){
+    const ops = [ymAdd(F.m,-1), F.m, ymAdd(F.m,1)];
+    return hd + `${avisos}
+      <div class="small mut2" style="margin-bottom:8px">${F.r.transacoes.length} lançamentos${F.r.banco?' · '+esc(F.r.banco):''}${F.r.referencia&&F.r.referencia.total!=null?' · total impresso '+brl(F.r.referencia.total):''}.</div>
+      <div class="fld"><span>Essa fatura vence em</span><div class="chips">${ops.map(m=>`<button class="chip${F.m===m?' on':''}" data-act="cf-mes" data-v="${m}" style="flex:1">${ymRot(m)}</button>`).join('')}</div></div>
+      <button class="btn pri blk" data-act="cf-rodar" style="min-height:52px">Conferir</button>`;
+  }
+  const R = F.rel;
+  const resumo = `<div class="card" style="margin-bottom:12px;padding:12px 14px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="lbl">fatura de ${mesNome(F.m)}</span><span class="num" style="font-size:20px">${brl(R.totalCalculado)}</span></div>
+    <div class="small mut2" style="margin-top:4px">✓ ${R.batem.length + R.lancadosAchados.length} batem com o plano ou com o que você lançou${R.totalTaxas?` · taxas ${brl(R.totalTaxas)}`:''}</div></div>`;
+  if(F.etapa==='fim'){
+    const contest = Object.values(F.dec).filter(d=>d.acao==='contestar').length;
+    return hd + resumo + `<div class="big" style="font-size:26px;margin:8px 0">${contest?'Quase lá':'Tudo conferido ✓'}</div>
+      ${contest?`<div class="nota warn-n" style="margin-bottom:10px"><b>${contest} cobrança${contest>1?'s':''} pra contestar.</b> No app do cartão: abra a fatura, toque na compra e procure “Não reconheço” ou “Contestar”. Ela fica na aba Cartões até você marcar como resolvida.</div>`:''}
+      <div class="small mut2">Ao concluir, as compras do dia a dia entram nos seus gastos e o plano é atualizado com o que você escolheu.</div>
+      <button class="btn pri blk" data-act="cf-ok" style="min-height:52px;margin-top:14px">Concluir</button>
+      ${F.fila.length?'<button class="btn ghost blk" data-act="cf-volta">voltar</button>':''}`;
+  }
+  const c = F.fila[F.i], n = F.fila.length, dec = F.dec[chaveDec(c)] || {};
+  const prog = `<div class="passos" aria-label="${F.i+1} de ${n}">${F.fila.map((_,k)=>`<i class="${k<=F.i?'on':''}"></i>`).join('')}</div>
+    <div class="tiny mut" style="margin-bottom:8px">${F.i+1} de ${n}</div>`;
+  const bts = (pares) => `<div class="btns" style="margin-top:14px">${pares.map(([a,t,pri])=>`<button class="btn${pri?' pri':''}" data-act="cf-dec" data-v="${a}">${t}</button>`).join('')}</div>`;
+  let corpo = '';
+  if(c.tipo==='dup') corpo = `<div class="big" style="font-size:22px;margin-bottom:10px">Cobrança duplicada?</div>
+    <div class="carta">${linhaT(c.a)}</div><div class="carta">${linhaT(c.b)}</div>
+    <div class="small mut2">Mesma loja, mesmo valor, em poucos dias.</div>${bts([['duas','São duas compras'],['contestar','Sim, vou contestar',1]])}`;
+  else if(c.tipo==='rec'){
+    const cat = dec.cat || (c.c && c.c.cat) || 'outros';
+    corpo = `<div class="big" style="font-size:22px;margin-bottom:10px">Você reconhece?</div>
+      <div class="carta">${linhaT(c.t)}</div>
+      <div class="tiny mut2" style="margin:6px 0">Se for sua, é de qual tipo?</div>
+      <div class="chips">${CATS.map(k=>`<button class="chip${cat===k.k?' on':''}" data-act="cf-cat" data-v="${k.k}">${k.n}</button>`).join('')}</div>
+      ${bts([['contestar','Não reconheço'],['gasto','É minha',1]])}`;
+  }
+  else if(c.tipo==='lote') corpo = `<div class="big" style="font-size:22px;margin-bottom:6px">${c.itens.length} compras do dia a dia</div>
+    <div class="small mut2" style="margin-bottom:8px">O app já separou por categoria. Dê uma olhada rápida; se alguma não for sua, toque nela.</div>
+    <div class="card flush" style="max-height:46dvh;overflow:auto"><div class="rows">${c.itens.map(x=>{ const off = (F.dec.lote||{})[x.t.id]==='contestar', k = CAT[x.c.cat]||CAT.outros;
+      return `<button class="r" data-act="cf-lote" data-v="${x.t.id}" style="min-height:0;padding:8px 14px"><span class="sig ${k.env}">${k.s}</span>
+        <span class="tx"><b${off?' style="text-decoration:line-through"':''}>${esc(x.t.desc)}</b><span>${ddmm(x.t.dataCompra||x.t.data)} · ${off?'<span class="warn">não reconheço</span>':esc(k.n)}</span></span>
+        <span class="v" style="font-size:15px">${brl(Math.abs(x.t.valor))}</span></button>`;}).join('')}</div></div>
+    ${bts([['lote','Tudo certo',1]])}`;
+  else if(c.tipo==='valor') corpo = `<div class="big" style="font-size:22px;margin-bottom:10px">Mudou de valor</div>
+    <div class="carta">${linhaT(c.t)}</div>
+    <div class="small mut2">No plano: <b>${esc(c.e.nome)}</b> ${brl(c.e.v)} → agora ${brl(Math.abs(c.t.valor))} (${c.d>0?'+':'−'}${brl(Math.abs(c.d))}).</div>
+    ${bts([['so','Só este mês'],['plano','Atualizar o plano',1]])}`;
+  else if(c.tipo==='ass') corpo = `<div class="big" style="font-size:22px;margin-bottom:10px">Assinatura nova?</div>
+    <div class="carta">${linhaT(c.t)}</div><div class="small mut2">Não está no seu plano. Se repete todo mês, coloco no cartão pra entrar na previsão.</div>
+    ${bts([['uma','Foi só uma vez'],['plano','Todo mês',1]])}`;
+  else if(c.tipo==='parc') corpo = `<div class="big" style="font-size:22px;margin-bottom:10px">Parcelamento novo</div>
+    <div class="carta">${linhaT(c.t)}</div><div class="small mut2">Coloco as ${c.t.parcela.n} parcelas no cartão (${brl(Math.abs(c.t.valor))}/mês, até ${ymRot(ymAdd(F.m, c.t.parcela.n - c.t.parcela.k))}).</div>
+    ${bts([['nao','Não'],['plano','Colocar no plano',1]])}`;
+  else if(c.tipo==='falta') corpo = `<div class="big" style="font-size:22px;margin-bottom:10px">Não veio nesta fatura</div>
+    <div class="carta"><b>${esc(c.e.nome)}</b>${c.e.k?` · parcela ${c.e.k}/${c.e.n}`:''} · ${brl(c.e.v)}</div>
+    <div class="small mut2">Estava no plano. Pode ter acabado, mudado de cartão ou vir na próxima. Se acabou, ajuste na aba Cartões.</div>${bts([['ok','Entendi',1]])}`;
+  else if(c.tipo==='lfalta') corpo = `<div class="big" style="font-size:22px;margin-bottom:10px">Lançado, mas não veio</div>
+    <div class="carta"><b>${esc(c.l.t)}</b> · ${ddmm(c.l.d)} · ${brl(c.l.v)}</div>
+    <div class="small mut2">Você lançou no cartão, mas não está nesta fatura. Normalmente vem na próxima.</div>${bts([['ok','Entendi',1]])}`;
+  else if(c.tipo==='total') corpo = `<div class="big" style="font-size:22px;margin-bottom:10px">O total não bate</div>
+    <div class="small mut2">Total impresso ${brl(R.totalImpresso)}, soma das linhas ${brl(R.totalCalculado)} (diferença ${brl(Math.abs(R.diferencaTotal))}). Pode ser cartão adicional, ajuste ou juros de fatura anterior — vale olhar no app do banco.</div>${bts([['ok','Entendi',1]])}`;
+  return hd + resumo + prog + corpo + (F.i ? '<button class="btn ghost blk" data-act="cf-volta" style="margin-top:4px">voltar</button>' : '');
+}
+function aplicarConferencia(){
+  const F = UI.cf, R = F.rel, m = F.m, feito = new Set(); snap();
+  const marca = t => { S.vistos[t.id] = 1; feito.add(t.id); };
+  const gasto = (t, cat, extra) => {
+    if(feito.has(t.id)) return; marca(t);
+    if(S.lanc.some(l=>l.ext===t.id)) return;
+    S.lanc.push(Object.assign({id:uid(), d:t.dataCompra||t.data, v:Math.round(-t.valor*100)/100, c:CAT[cat]?cat:'outros', f:'cartao',
+      t:t.desc, ext:t.id, k:Extrato.chave(t.desc)}, extra||{}));
+  };
+  const contestar = t => { gasto(t, 'outros', {contestar:true}); if(!S.contestar.some(x=>x.tid===t.id)) S.contestar.push({id:uid(), tid:t.id, d:t.data, v:-t.valor, t:t.desc, m, status:'aberta'}); };
+  const dec = c => F.dec[chaveDec(c)] || {};
+  R.batem.forEach(x=>marca(x.t)); R.pagamentos.forEach(x=>marca(x.t));
+  R.lancadosAchados.forEach(x=>{ marca(x.t); const l = S.lanc.find(l=>l.id===x.lancado.id); if(l && !l.ext) l.ext = x.t.id; });
+  F.fila.forEach(c=>{
+    const d = dec(c);
+    if(c.tipo==='valor'){
+      const it = S.itens.find(i=>i.id===c.e.id), nv = Math.abs(c.t.valor);
+      if(it){ if(d.acao==='so') it.so = Object.assign({}, it.so, {[m]:nv}); else if(d.acao==='plano'){ it.hist = (it.hist||[]).filter(h=>h.de < m); if(it.so) delete it.so[m]; it.hist.push({de:m, v:nv}); } }
+      marca(c.t);
+    } else if(c.tipo==='ass'){
+      if(d.acao==='plano'){ S.itens.push({id:uid(), tipo:'cartao', nome:semParcela(c.t.desc), v:Math.abs(c.t.valor), de:m}); marca(c.t); }
+      else gasto(c.t, 'outros');
+    } else if(c.tipo==='parc'){
+      if(d.acao!=='nao'){ S.itens.push({id:uid(), tipo:'cartao', nome:semParcela(c.t.desc), v:Math.abs(c.t.valor), n:c.t.parcela.n, de:ymAdd(m, -(c.t.parcela.k-1))}); marca(c.t); }
+      else gasto(c.t, 'compras');
+    } else if(c.tipo==='dup'){
+      if(d.acao==='contestar'){ const cl = Extrato.classificar(c.a, S.regras); gasto(c.a, cl.cat); contestar(c.b); }
+    } else if(c.tipo==='rec'){
+      if(d.acao==='contestar') contestar(c.t); else gasto(c.t, d.cat || (c.c && c.c.cat));
+    } else if(c.tipo==='lote'){
+      const off = d || {};
+      c.itens.forEach(x=>{ if(off[x.t.id]==='contestar') contestar(x.t); else gasto(x.t, x.c.cat); });
+    }
+  });
+  // o que sobrou: duplicadas aceitas, taxas, créditos e compras não decididas
+  R.duplicadas.forEach(x=>{ [x.a, x.b].forEach(t=>gasto(t, Extrato.classificar(t, S.regras).cat)); });
+  R.taxas.forEach(x=>gasto(x.t, 'outros'));
+  R.creditos.forEach(x=>gasto(x.t, (Extrato.classificar(x.t, S.regras).cat) || 'outros'));
+  R.naoReconhecidos.forEach(x=>gasto(x.t, x.c && x.c.cat));
+  const nCont = S.contestar.filter(x=>x.m===m && x.status==='aberta').length;
+  S.conferidas[m] = {em:HOJE(), total:Math.round(R.totalCalculado*100)/100, contestar:nCont};
+  save(); fechar(); UI.tab = 'cartoes'; UI.mes = m; render(); window.scrollTo({top:0}); vibrar(30);
+  toast(nCont ? `Fatura conferida. ${nCont} pra contestar.` : 'Fatura conferida ✓ tudo certo', true);
+}
+
+/* lembretes no calendário (.ics) */
+function gerarAgenda(){
+  if(!window.Agenda){ toast('O gerador de lembretes não carregou'); return; }
+  const P = plano(MES());
+  const eventos = Agenda.lembretesPadrao({
+    contas: P.contas.filter(x=>x.it.dia && !x.it.auto).map(x=>({id:x.it.id, nome:x.it.nome, dia:+x.it.dia, v:x.v})),
+    fatura: S.cartao.dia ? {dia:+S.cartao.dia} : undefined,
+    revisaoSemanal: {diaSemana:'SU', hora:'19:00'},
+    marcos: S.marcos, hoje: HOJE(), meses: 12 });
+  baixar('financeiro-lembretes.ics', 'text/calendar;charset=utf-8', Agenda.gerar({nome:'Financeiro', eventos}));
+  S.agendaEm = HOJE(); save();
+  toast('Abra o arquivo baixado e adicione ao calendário 📅');
+}
+
 /* importar (confirmação) */
 function shImp(){
   const d = UI.imp; if(!d) return '';
@@ -1714,6 +2263,17 @@ function shAjustes(){
     <label class="fld"><span>Vence dia</span><input class="inp n" data-cfg="cartao.dia" inputmode="numeric" value="${S.cartao.dia||''}" placeholder="—"></label>
   </div>
   <div class="tiny mut" style="margin:-4px 0 4px">Com os dois dias, cada compra no cartão (e cada parcela nova) cai na fatura certa.</div>
+  <div class="lbl" style="margin:18px 0 8px">privacidade</div>
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <button class="btn blk" data-act="cadeado">${temPin()?'Cadeado ligado · trocar PIN':'Trancar o app com PIN'}</button>
+    <label class="sw"><input type="checkbox" data-act="discreto"${S.seg.discreto?' checked':''}> Modo discreto: esconder os valores (o 👁 no topo liga e desliga)</label>
+  </div>
+  <label class="fld" style="margin-top:8px"><span>Seu nome (aparece no painel)</span><input class="inp" data-cfg2="nome" value="${esc(S.nome||'')}" autocomplete="off"></label>
+  <div class="lbl" style="margin:18px 0 8px">lembretes e comprovantes</div>
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <button class="btn blk" data-act="agenda">Lembretes das contas no calendário (.ics)</button>
+    <button class="btn blk" data-act="comp">Comprovantes</button>
+  </div>
   <div class="lbl" style="margin:18px 0 8px">cenário e extratos</div>
   <div style="display:flex;flex-direction:column;gap:8px">
     <button class="btn blk" data-act="cen">Plantões, piso da reserva e datas</button>
@@ -1737,12 +2297,14 @@ function shAjustes(){
 }
 
 /* ══════════════════ ações ══════════════════ */
-function toast(msg, undo){
-  const t = document.getElementById('toast');
+function toast(msg, undo, acao){
+  const t = document.getElementById('toast'), a = document.getElementById('tacao');
   t.querySelector('span').textContent = msg;
-  t.querySelector('button').classList.toggle('hide', !undo || !undoSnap);
+  document.getElementById('undo').classList.toggle('hide', !undo || !undoSnap);
+  UI.toastAcao = acao ? acao.fn : null;
+  a.classList.toggle('hide', !acao); a.textContent = acao ? acao.txt : '';
   t.classList.add('on');
-  clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove('on'), 4500);
+  clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove('on'), acao ? 7000 : 4500);
 }
 function desfazer(){
   if(!undoSnap) return;
@@ -1793,6 +2355,19 @@ function importarHash(){
 
 /* ══════════════════ eventos ══════════════════ */
 document.addEventListener('click', e => {
+  if(CAD.travado){
+    const k = e.target.closest('#cadeado [data-act]'); if(!k) return;
+    const a = k.dataset.act;
+    if(a==='pin-tecla') teclaPin(k.dataset.v);
+    else if(a==='pin-esqueci'){ CAD.esqueci = true; renderCadeado(); }
+    else if(a==='pin-apagar'){
+      if(!CAD.confApagar){ CAD.confApagar = true; k.textContent = 'Toque de novo para apagar tudo'; return; }
+      try{ localStorage.removeItem(KEY); indexedDB.deleteDatabase('financeiro-comprovantes'); }catch(_){}
+      location.reload();
+    }
+    return;
+  }
+  if(e.target.closest('#tacao')){ const f = UI.toastAcao; document.getElementById('toast').classList.remove('on'); if(f) f(); return; }
   const nav = e.target.closest('#nav button[data-tab]');
   if(nav){ UI.tab = nav.dataset.tab; if(UI.tab!=='futuro') UI.sel = null; render(); window.scrollTo({top:0}); return; }
   if(e.target.closest('#fab')){ if(S.novo){ toast('Importe seus dados ou comece do zero primeiro'); return; } UI.add = novoAdd(); abrir('add'); return; }
@@ -1842,7 +2417,14 @@ document.addEventListener('click', e => {
       set(s=>{ s.pagos[m] = s.pagos[m]||{};
         if(s.pagos[m][id]) delete s.pagos[m][id];
         else s.pagos[m][id] = m===MES() ? HOJE() : (m < MES() ? m+'-'+pad2(Math.min(c.dia||1,diasMes(m))) : true); });
-      toast(S.pagos[m][id] ? c.nome+' paga ✓' : c.nome+' desmarcada', true); break; }
+      if(S.pagos[m][id]){
+        vibrar(20);
+        const falta = contasDoMes(m).filter(x=>!resolvida(x,m)).length;
+        toast(falta ? c.nome+' paga ✓' : 'Todas as contas de '+mesNome(m)+' pagas 🎉', true,
+          window.Comprovantes && !temComp(id,m) ? {txt:'📎 comprovante', fn:()=>pedirComprovante(id, m)} : null);
+        if(UI.sheet==='rev') renderSheet();
+      } else toast(c.nome+' desmarcada', true);
+      break; }
 
     // lançamentos
     case 'ed-lanc': { const l = S.lanc.find(x=>x.id===b.dataset.id); if(!l) break;
@@ -1878,6 +2460,83 @@ document.addEventListener('click', e => {
     case 'del-obj': { snap(); const id = UI.ed; set(s=>{ s.objetivos = s.objetivos.filter(x=>x.id!==id); }); fechar(); toast('Objetivo apagado', true); break; }
 
     case 'sim': UI.sim = 500; abrir('sim'); break;
+
+    // privacidade
+    case 'discreto': S.seg.discreto = !S.seg.discreto; save(); renderView(); if(UI.sheet==='ajustes') renderSheet();
+      toast(S.seg.discreto ? 'Valores escondidos' : 'Valores à mostra'); break;
+    case 'cadeado': UI.pin = {minutos:S.seg.minutos||5, dica:(S.seg.pin&&S.seg.pin.dica)||''}; abrir('pin'); break;
+    case 'p-min': { const d = document.getElementById('p-dica'); if(d) UI.pin.dica = d.value; UI.pin.minutos = +v; renderSheet(); break; }
+    case 'p-salvar': {
+      const a1 = document.getElementById('p-1').value, a2 = document.getElementById('p-2').value, dica = document.getElementById('p-dica').value.trim();
+      if(!/^\d{4,6}$/.test(a1)){ toast('O PIN precisa ter de 4 a 6 números'); break; }
+      if(a1 !== a2){ toast('Os dois PINs não são iguais'); break; }
+      if(!(window.crypto && crypto.subtle)){ toast('Este navegador não deixa usar cadeado aqui'); break; }
+      const sal = hexDe(crypto.getRandomValues(new Uint8Array(16)));
+      hashPin(a1, sal).then(hash=>{ S.seg.pin = {sal, hash, n:a1.length, dica}; S.seg.minutos = UI.pin.minutos; save(); fechar(); render();
+        toast('Cadeado ligado 🔒 Não esqueça o PIN: sem ele, só apagando os dados.'); });
+      break; }
+    case 'p-tirar': snap(); S.seg.pin = null; save(); fechar(); render(); toast('Cadeado desligado', true); break;
+
+    // agora, revisão e “quero comprar”
+    case 'agora-tudo': UI.agoraTudo = !UI.agoraTudo; renderView(); break;
+    case 'rev': UI.rev = {p:1}; abrir('rev'); break;
+    case 'rev-prox':
+      if(UI.rev.p < 4){ UI.rev.p++; renderSheet(); document.getElementById('sheet').scrollTop = 0; }
+      else { if(S.revisoes[S.revisoes.length-1]!==HOJE()) S.revisoes.push(HOJE()); S.revisoes = S.revisoes.slice(-60); save(); fechar(); render(); vibrar(30);
+        const n = sequencia(); toast('Revisão feita 🎉' + (n>1 ? ' ' + n + ' semanas seguidas!' : ' Até a próxima semana.')); }
+      break;
+    case 'rev-lancar': UI.depois = () => abrir('rev'); UI.add = novoAdd(); abrir('add'); break;
+    case 'desejo': UI.ed = b.dataset.id; abrir('desejo'); break;
+    case 'desejo-novo': {
+      const n = (document.getElementById('s-nome').value || '').trim();
+      if(!n){ toast('Diga o que é (ex.: tênis)'); break; }
+      if(!UI.sim){ toast('Coloque o valor'); break; }
+      S.desejos.push({id:uid(), n, v:UI.sim, em:Date.now(), fim:null}); save(); fechar(); render();
+      toast('Anotado. Daqui a 48 h eu pergunto se ainda quer 😉'); break; }
+    case 'desejo-sim': { const d = S.desejos.find(x=>x.id===UI.ed); if(!d) break; d.fim = 'comprei'; d.fimEm = HOJE(); save();
+      UI.add = Object.assign(novoAdd(), {amt:fmtIn(d.v).replace(/,00$/,''), c:'compras', t:d.n}); abrir('add'); break; }
+    case 'desejo-nao': { const d = S.desejos.find(x=>x.id===UI.ed); if(!d) break; d.fim = 'desisti'; d.fimEm = HOJE(); save(); fechar(); render(); vibrar(30);
+      toast(brl(d.v,0)+' ficaram com você 💪'); break; }
+    case 'desejo-apagar': snap(); S.desejos = S.desejos.filter(x=>x.id!==UI.ed); save(); fechar(); render(); toast('Tirado da lista', true); break;
+
+    // comprovantes
+    case 'comp': abrirCofre(v && /^\d{4}-\d{2}$/.test(v) ? v : MES()); break;
+    case 'comp-mes': UI.compMes = ymAdd(UI.compMes, +v); UI.compLista = null; renderSheet(); carregarCofre(); break;
+    case 'comp-add': pedirComprovante(b.dataset.ref, b.dataset.m); break;
+    case 'comp-novo': UI.compAlvo = {m:UI.compMes || MES()}; document.getElementById('i-comp').click(); break;
+    case 'comp-ver': verComp(v); break;
+    case 'comp-apagar':
+      if(UI.conf !== 'apagar:'+v){ UI.conf = 'apagar:'+v; renderSheet(); break; }
+      Comprovantes.apagar(v).then(()=>{ UI.conf = null; toast('Comprovante apagado'); carregarCofre(); atualizaSemComp(true); }); break;
+    case 'comp-zip':
+      if(!window.Comprovantes) break;
+      toast('Montando o .zip…');
+      Comprovantes.exportarZip().then(blob=>{ baixarBlob('comprovantes-'+HOJE()+'.zip', blob); S.zipEm = HOJE(); save(); render(); toast('Backup baixado. Guarde no Drive ✓'); })
+        .catch(e=>toast((e && e.message) || 'Não deu pra montar o .zip'));
+      break;
+    case 'compqual-ref': UI.compNovo.ref = v; renderSheet(); break;
+    case 'compqual-ok': { const N = UI.compNovo; if(N && N.ref) salvarComp(N.file, N.ref, N.m, N.info); break; }
+
+    // conferir fatura
+    case 'conf': abrirConf(); break;
+    case 'cf-arq': document.getElementById('i-fat').click(); break;
+    case 'cf-ler': { const t = document.getElementById('cf-txt'); if(!t || !t.value.trim()){ toast('Cole o texto da fatura'); break; }
+      prepararFatura(Extrato.lerTexto(t.value, {ano:+HOJE().slice(0,4), conta:'cartao'}), 'texto colado'); renderSheet(); break; }
+    case 'cf-mes': UI.cf.m = v; renderSheet(); break;
+    case 'cf-rodar': rodarConf(); renderSheet(); document.getElementById('sheet').scrollTop = 0; break;
+    case 'cf-cat': { const F = UI.cf, c = F.fila[F.i], k = chaveDec(c); F.dec[k] = Object.assign({}, F.dec[k], {cat:v}); renderSheet(); break; }
+    case 'cf-lote': { const F = UI.cf, L = F.dec.lote = F.dec.lote || {}; L[v] = L[v]==='contestar' ? null : 'contestar'; renderSheet(); break; }
+    case 'cf-dec': {
+      const F = UI.cf, c = F.fila[F.i], k = chaveDec(c);
+      if(c.tipo!=='lote') F.dec[k] = Object.assign({}, F.dec[k], {acao:v});
+      vibrar(10);
+      if(F.i < F.fila.length-1) F.i++; else F.etapa = 'fim';
+      renderSheet(); document.getElementById('sheet').scrollTop = 0; break; }
+    case 'cf-volta': { const F = UI.cf; if(F.etapa==='fim') F.etapa = 'cartas'; else if(F.i) F.i--; renderSheet(); break; }
+    case 'cf-ok': aplicarConferencia(); break;
+    case 'contest-ok': { const x = S.contestar.find(c=>c.id===v); if(x){ snap(); x.status = 'resolvida'; save(); render(); toast('Marcada como resolvida ✓', true); } break; }
+
+    case 'agenda': gerarAgenda(); break;
 
     // cenário e piso
     case 'cen': abrirCen(); break;
@@ -1920,6 +2579,7 @@ document.addEventListener('input', e => {
     document.getElementById('sim-out').innerHTML = simOut();
     return;
   }
+  if(t.dataset.cfg2==='nome'){ S.nome = t.value.trim().slice(0,30); save(); return; }
   if(t.dataset.cfg){
     const [a,k] = t.dataset.cfg.split('.');
     S[a][k] = a==='cartao' ? (Math.min(Math.max(parseInt(t.value,10)||0,0),31) || null) : nnum(t.value);
@@ -1929,6 +2589,8 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const t = e.target;
   if(t.id==='i-data' && UI.add){ const d = document.getElementById('i-desc'); if(d) UI.add.t = d.value; UI.add.d = t.value || HOJE(); renderSheet(); }
+  if(t.id==='i-comp' && t.files.length){ const f = t.files[0], alvo = UI.compAlvo || {m:MES()}; t.value = ''; anexar(f, alvo); return; }
+  if(t.id==='i-fat' && t.files.length){ const fs = [...t.files]; t.value = ''; lerFatura(fs); return; }
   if(t.id==='i-ext' && t.files.length){ const fs = [...t.files]; t.value = ''; lerArquivosExtrato(fs); return; }
   if(t.id==='i-import' && t.files[0]){
     const fr = new FileReader();
@@ -1938,6 +2600,7 @@ document.addEventListener('change', e => {
   if(t.dataset && t.dataset.cfg) renderView();
 });
 document.addEventListener('keydown', e => {
+  if(CAD.travado){ if(/^\d$/.test(e.key)) teclaPin(e.key); else if(e.key==='Backspace') teclaPin('⌫'); e.preventDefault(); return; }
   if(e.key==='Escape' && UI.sheet){ fechar(); return; }
   if(UI.sheet==='add'){
     const emCampo = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
@@ -1953,6 +2616,9 @@ window.addEventListener('hashchange', importarHash);
 /* volta para o app depois de horas: o dia (e o mês) podem ter mudado */
 let ultimoDia = HOJE();
 document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState==='hidden'){ CAD.fora = Date.now(); return; }
+  if(temPin() && CAD.fora && Date.now() - CAD.fora > (S.seg.minutos||5)*60000) travar();
+  CAD.fora = null;
   if(document.visibilityState==='visible' && HOJE()!==ultimoDia){
     if(UI.mes===ultimoDia.slice(0,7)) UI.mes = MES();
     ultimoDia = HOJE(); if(!UI.sheet) render();
@@ -1962,7 +2628,9 @@ document.addEventListener('visibilitychange', () => {
 /* ══════════════════ início ══════════════════ */
 S = load();
 render();
+if(temPin()) travar();
 importarHash();
+pegarCompartilhados();
 if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
 if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
