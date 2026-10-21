@@ -3,3 +3,6 @@
 import './extrato.test.mjs';
 import './ataque-classificacao.test.mjs';
 import './ataque-formatos.test.mjs';
+import './comprovantes.test.mjs';
+import './agenda.test.mjs';
+import './conferencia.test.mjs';

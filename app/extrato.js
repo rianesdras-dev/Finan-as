@@ -9,7 +9,9 @@
      chave(desc)                     -> chave estável do comerciante, para aprender correções
      classificar(t, regras?)         -> { tipo, cat, assinatura, confianca, chave }
 
-   Resultado  = { formato, banco, conta, transacoes, avisos }
+   Resultado  = { formato, banco, conta, transacoes, avisos, referencia }
+   referencia = { vencimento:'AAAA-MM-DD'|null, fechamento:'AAAA-MM-DD'|null, total:number|null }  (sempre presente;
+                veja 'referência da fatura' abaixo: total positivo = valor a pagar, nunca a soma das linhas)
    Transacao  = { id, data:'AAAA-MM-DD', valor, desc, original, parcela:{k,n}|null, conta }
    valor < 0 é dinheiro saindo; valor > 0 é dinheiro entrando. */
 (function (raiz) {
@@ -585,7 +587,7 @@
     return m ? m[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;|&#39;/g, "'").trim() : '';
   };
   function lerOFX(texto, opcoes) {
-    const res = { formato: 'ofx', banco: null, conta: null, transacoes: [], avisos: [] };
+    const res = { formato: 'ofx', banco: null, conta: null, transacoes: [], avisos: [], referencia: referenciaVazia() };
     const cartao = /<(CREDITCARDMSGSRSV1|CCSTMTRS|CCACCTFROM)>/i.test(texto);
     res.conta = opcoes.conta || (cartao ? 'cartao' : (/<(BANKMSGSRSV1|STMTRS|BANKACCTFROM)>/i.test(texto) ? 'corrente' : null));
     const org = tagOfx(texto, 'ORG'), bankid = tagOfx(texto, 'BANKID'), fid = tagOfx(texto, 'FID');
@@ -622,6 +624,7 @@
     }
     if (invalidas && !lista.length) res.avisos.push('O OFX não tem lançamentos com data válida.');
     const prefixo = res.banco === 'Nubank' ? 'nu' : 'ofx';
+    res.referencia = referenciaDoOFX(texto, res.conta);
     return finalizar(res, lista, prefixo);
   }
 
@@ -722,7 +725,7 @@
   }
 
   function lerCSV(texto, nome, opcoes) {
-    const res = { formato: 'csv', banco: null, conta: null, transacoes: [], avisos: [] };
+    const res = { formato: 'csv', banco: null, conta: null, transacoes: [], avisos: [], referencia: referenciaVazia() };
     const linhas = texto.split(/\r\n|\r|\n/);
     const cab = acharCabecalho(linhas);
     if (!cab) return null;
@@ -823,6 +826,9 @@
       if (movidas) res.avisos.push(movidas + (movidas > 1 ? ' parcelas vieram' : ' parcela veio') + ' com a data da compra original; usei o mês da cobrança.');
     }
     const prefixo = res.banco === 'Nubank' ? 'nu' : res.banco === 'Mercado Pago' ? 'mp' : 'id';
+    // o CSV não traz cabeçalho de fatura: só o nome do arquivo (vencimento no cartão, fim do período na conta)
+    if (conta === 'cartao') res.referencia.vencimento = vencimentoDoNome(nome);
+    else res.referencia.fechamento = fimPeriodoDoNome(nome);
     return finalizar(res, lista, prefixo);
   }
 
@@ -920,7 +926,7 @@
 
   function lerTexto(texto, opcoes) {
     opcoes = opcoes || {};
-    const res = { formato: 'texto', banco: null, conta: null, transacoes: [], avisos: [] };
+    const res = { formato: 'texto', banco: null, conta: null, transacoes: [], avisos: [], referencia: referenciaVazia() };
     try {
       if (texto != null && typeof texto !== 'string') texto = decodificar(texto);
       texto = consertarMojibake(String(texto || '').replace(/^\ufeff/, ''));
@@ -1049,12 +1055,186 @@
       }
       if (usouHoje) res.avisos.push('Algumas linhas não tinham data; usei a data de hoje.');
       if (!lista.length) res.avisos.push('Não encontrei lançamentos no texto. Cada linha precisa ter data, descrição e valor. ' + DICA_PDF);
-      return finalizar(res, lista, 'tx');
+      finalizar(res, lista, 'tx');
+      res.referencia = referenciaDoTexto(linhas, conta, res.transacoes, opcoes);
+      return res;
     } catch (e) {
       res.transacoes = [];
+      res.referencia = referenciaVazia();
       res.avisos.push('Não consegui ler o texto (' + ((e && e.message) || 'erro') + ').');
       return res;
     }
+  }
+
+  /* ── referência da fatura: vencimento, fechamento e total ── */
+
+  // Resultado.referencia = { vencimento, fechamento, total }, SEMPRE presente (null quando não se sabe).
+  //   vencimento: dia de pagar a fatura (só cartão).
+  //   fechamento: dia em que a fatura fechou (cartão); na conta corrente, o fim do período do extrato
+  //               quando ele vem escrito (OFX <DTEND>, 'Período: ... a 19/10/2026', nome NU_..._19OUT2026).
+  //   total:      valor da fatura como o banco imprimiu, positivo = a pagar (negativo = saldo credor).
+  //               Só sai de um rótulo explícito ('Total da fatura R$ ...') ou do saldo do OFX do cartão;
+  //               nunca é a soma das linhas (quem soma é a página, para conferir).
+  const referenciaVazia = () => ({ vencimento: null, fechamento: null, total: null });
+
+  // Data, com ou sem ano, no começo de s (já em minúsculas e sem acento):
+  // '14/11/2026', '15.11.2026', '2026-11-14', '14 nov 2026', '15 de novembro', '07/11'. Devolve { d, m, a|null }.
+  function dataParcialNoInicio(s) {
+    s = String(s || '').trim();
+    let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return { d: +m[3], m: +m[2], a: +m[1] };
+    m = s.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4}|\d{2})(?!\d)/);
+    if (m) return { d: +m[1], m: +m[2], a: ano4(+m[3]) };
+    m = s.match(/^(\d{1,2})\s+(?:de\s+)?([a-z]{3,9})\.?(?:\s+(?:de\s+)?(\d{4}))?(?![a-z\d])/);
+    if (m && mesDe(m[2])) return { d: +m[1], m: mesDe(m[2]), a: m[3] ? +m[3] : null };
+    m = s.match(/^(\d{1,2})[/.](\d{1,2})(?![/.\d])/);
+    if (m) return { d: +m[1], m: +m[2], a: null };
+    return null;
+  }
+  // Põe o ano numa data sem ano: o ano (entre o da âncora -1 e +1) que deixa a data mais perto da âncora.
+  function resolverData(p, ancora) {
+    if (!p) return null;
+    if (p.a) return iso(p.a, p.m, p.d);
+    const y = +ancora.slice(0, 4);
+    let melhor = null;
+    [y - 1, y, y + 1].forEach(a => {
+      const d = iso(a, p.m, p.d);
+      if (d && (!melhor || Math.abs(diasEntre(d, ancora)) < Math.abs(diasEntre(melhor, ancora)))) melhor = d;
+    });
+    return melhor;
+  }
+  // Âncora para o ano: o lançamento mais recente (sem contar parcelas que mudamos de mês), senão op.ano, senão hoje.
+  function ancoraDe(transacoes, opcoes) {
+    let max = null;
+    (transacoes || []).forEach(t => { if (!t.dataCompra && (!max || t.data > max)) max = t.data; });
+    if (max) return max;
+    if (opcoes && opcoes.ano >= 1990 && opcoes.ano <= 2100) return opcoes.ano + '-06-15';
+    return hojeIso();
+  }
+  function somarDias(dataIso, n) {
+    const t = new Date(Date.parse(dataIso) + n * 864e5);
+    return t.getUTCFullYear() + '-' + pad(t.getUTCMonth() + 1) + '-' + pad(t.getUTCDate());
+  }
+
+  // Nome do arquivo da fatura em CSV: 'Nubank_2026-11-14.csv' (Nubank) e 'Fatura_2026-11-15.csv' (C6).
+  // A data é a do VENCIMENTO: o PDF da mesma fatura do Nubank traz 'FATURA 14 NOV 2026' (dia de pagar), e as
+  // fixtures da pesquisa casam assim. Para o C6 isto não foi confirmado com um arquivo real (só a fixture).
+  function vencimentoDoNome(nome) {
+    const base = String(nome || '').split(/[\\/]/).pop();
+    const m = base.match(/^(?:nubank|fatura)[_\- ](20\d{2})-(\d{2})-(\d{2})(?!\d)/i);
+    return m ? iso(+m[1], +m[2], +m[3]) : null;
+  }
+  // Fim do período no nome do extrato da conta Nubank: NU_123_01OUT2026_19OUT2026.csv
+  function fimPeriodoDoNome(nome) {
+    const m = String(nome || '').match(/\d{2}[A-Za-z]{3}20\d{2}[_\- ]+(\d{2})([A-Za-z]{3})(20\d{2})/);
+    return m && mesDe(m[2]) ? iso(+m[3], mesDe(m[2]), +m[1]) : null;
+  }
+
+  // Rótulos procurados nas linhas da fatura (texto em minúsculas e sem acento).
+  const RE_REF_VENC = /(?:^|[^a-z])(?:data de )?vencimento\b/;
+  const RE_REF_VENC_NAO = /(proximo|novo|nova data de|melhor dia)\s+(data de )?vencimento/;
+  const RE_REF_FECH = /\b(?:data de fechamento|fechamento( da fatura)?|fatura fechada em|fechada em|fecha em)\b/;
+  const RE_REF_FECH_NAO = /proximo fechamento|proxima fatura fecha/;
+  const RE_REF_TOTAL_FORTE = /\b(?:valor )?total (?:da|desta|dessa) fatura\b|\btotal da sua fatura\b/;
+  const RE_REF_TOTAL_FRACO = /\bvalor da fatura\b|\btotal a pagar\b|\bpagamento total\b/;
+  const RE_REF_TOTAL_NAO = /anterior|minimo|em (dolar|us\b|usd)|us\$|proxim|futur|parcelad|fechada|em aberto/;
+  const RE_REF_PERIODO_CARTAO = /\b(periodo vigente|periodo|transacoes de|consumos de|lancamentos de)\b.*\s(?:a|ate)\s+(.*)$/;
+  const RE_REF_PERIODO_CONTA = /\b(periodo|movimentacoes|extrato de|transacoes de)\b.*\s(?:ate|a|al)\s+(.*)$/;
+
+  // Valor monetário (com sinal) no começo do texto que segue um rótulo.
+  function totalApos(s) {
+    if (!/\d/.test(s)) return null;
+    const v = acharValor(s);
+    if (!v || v.indice > 40) return null;
+    return v.sinal < 0 ? -v.abs : v.abs;
+  }
+
+  // Lê vencimento/fechamento/total das linhas de uma fatura em texto (PDF ou colado).
+  // Em cada campo vale o primeiro candidato da classe mais forte; datas sem ano ganham o ano pela âncora
+  // (o fechamento, pelo vencimento quando há).
+  function referenciaDoTexto(linhas, conta, transacoes, opcoes) {
+    const ref = referenciaVazia();
+    const ancora = ancoraDe(transacoes, opcoes);
+    if (conta !== 'cartao') {
+      for (const L of linhas.slice(0, 60)) {
+        const p = semAcento(L).toLowerCase().match(RE_REF_PERIODO_CONTA);
+        const d = p && resolverData(dataParcialNoInicio(p[2]), ancora);
+        if (d) { ref.fechamento = d; break; }
+      }
+      return ref;
+    }
+    let venc = null, fech = null, fechPeriodo = null, fechMelhorDia = null, totalForte = null, totalFraco = null;
+    for (let i = 0; i < linhas.length; i++) {
+      const L = linhas[i];
+      if (dataNoInicio(L)) continue;   // linha que começa com data é lançamento, não cabeçalho
+      const n = semAcento(L).toLowerCase();
+      // cabeçalho em colunas: 'Total da fatura Vencimento' e os valores na linha de baixo ('R$ 132,41 15/11/2026')
+      if (!/\d/.test(n) && i + 1 < linhas.length && (RE_REF_TOTAL_FORTE.test(n) || RE_REF_VENC.test(n))) {
+        const prox = semAcento(linhas[i + 1]).toLowerCase();
+        if (!temLetras(prox.replace(/r\$/g, ''))) {
+          const dataProx = dataCompletaEm(prox);
+          if (RE_REF_VENC.test(n) && !RE_REF_VENC_NAO.test(n) && !venc && dataProx) venc = dataProx;
+          const semData = prox.replace(/\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}/g, x => ' '.repeat(x.length));
+          if (RE_REF_TOTAL_FORTE.test(n) && !RE_REF_TOTAL_NAO.test(n) && totalForte == null) totalForte = totalApos(semData);
+          continue;
+        }
+      }
+      // vencimento: 'Vencimento: 14/11/2026', 'Data de vencimento 14 NOV 2026', 'Vencimento: 15 de novembro'
+      let m = n.match(RE_REF_VENC);
+      if (m && !venc && !RE_REF_VENC_NAO.test(n)) {
+        const depois = n.slice(m.index + m[0].length).match(/^[^0-9]{0,25}(.*)$/);
+        const p = depois && dataParcialNoInicio(depois[1]);
+        if (p) venc = p;
+      }
+      // Nubank: 'FATURA 14 NOV 2026 EMISSÃO E ENVIO 07 NOV 2026' (a data logo depois de 'fatura' é o vencimento)
+      m = n.match(/^fatura\s+(?=\d)/);
+      if (m && !venc) { const p = dataParcialNoInicio(n.slice(m[0].length)); if (p && p.a) venc = p; }
+      // fechamento: 'Fatura fechada em 07/11', 'Data de fechamento: 07/11/2026'
+      m = n.match(RE_REF_FECH);
+      if (m && !fech && !RE_REF_FECH_NAO.test(n)) {
+        const depois = n.slice(m.index + m[0].length).match(/^[^0-9]{0,25}(.*)$/);
+        const p = depois && dataParcialNoInicio(depois[1]);
+        if (p) fech = p;
+      }
+      // fim do período da fatura: 'Período vigente: 07 OUT a 07 NOV', 'Consumos de 06/10 a 05/11'
+      m = n.match(RE_REF_PERIODO_CARTAO);
+      if (m && !fechPeriodo) { const p = dataParcialNoInicio(m[2]); if (p) fechPeriodo = p; }
+      // 'Melhor dia de compra: 08/11': a fatura fecha na véspera
+      m = n.match(/\bmelhor dia (?:de|para) compra(?:s|r)?\b[^0-9]{0,15}(.*)$/);
+      if (m && !fechMelhorDia) { const p = dataParcialNoInicio(m[1]); if (p) fechMelhorDia = p; }
+      // total: rótulos fortes ('Total da fatura', 'Total desta fatura', 'Valor total da fatura') antes dos fracos
+      m = n.match(RE_REF_TOTAL_FORTE);
+      if (m && totalForte == null && !RE_REF_TOTAL_NAO.test(n)) totalForte = totalApos(n.slice(m.index + m[0].length));
+      m = n.match(RE_REF_TOTAL_FRACO);
+      if (m && totalFraco == null && !RE_REF_TOTAL_NAO.test(n)) totalFraco = totalApos(n.slice(m.index + m[0].length));
+    }
+    ref.vencimento = (typeof venc === 'string' ? venc : resolverData(venc, ancora)) || vencimentoDoNome(opcoes && opcoes.nome);
+    const ancoraFech = ref.vencimento || ancora;
+    ref.fechamento = resolverData(fech, ancoraFech) || resolverData(fechPeriodo, ancoraFech);
+    if (!ref.fechamento && fechMelhorDia) { const d = resolverData(fechMelhorDia, ancoraFech); if (d) ref.fechamento = somarDias(d, -1); }
+    // o fechamento vem antes do vencimento; se a conta do ano deu depois, é do ano anterior
+    if (ref.fechamento && ref.vencimento && ref.fechamento > ref.vencimento && !(fech && fech.a)) {
+      const [a, mm, dd] = ref.fechamento.split('-').map(Number);
+      ref.fechamento = iso(a - 1, mm, dd) || ref.fechamento;
+    }
+    ref.total = totalForte != null ? totalForte : totalFraco;
+    return ref;
+  }
+
+  // OFX: fim do período em <BANKTRANLIST><DTEND>; no cartão, <LEDGERBAL><BALAMT> negativo = valor devido.
+  // Saldo positivo no cartão é ambíguo (banco com outra convenção de sinal, ou saldo credor): fica null.
+  function referenciaDoOFX(texto, conta) {
+    const ref = referenciaVazia();
+    const lista = texto.match(/<BANKTRANLIST>[\s\S]*?(?:<\/BANKTRANLIST>|<STMTTRN>)/i);
+    const fim = lista ? tagOfx(lista[0], 'DTEND').replace(/\D/g, '').slice(0, 8) : '';
+    if (fim.length === 8) ref.fechamento = iso(+fim.slice(0, 4), +fim.slice(4, 6), +fim.slice(6, 8));
+    if (conta === 'cartao') {
+      const ledger = texto.match(/<LEDGERBAL>[\s\S]*?(?:<\/LEDGERBAL>|$)/i);
+      const bruto = ledger ? tagOfx(ledger[0], 'BALAMT').replace(/\s/g, '') : '';
+      const v = !bruto ? NaN : /,/.test(bruto) ? lerValor(bruto) : parseFloat(bruto);
+      if (isFinite(v) && v <= 0) ref.total = Math.round(-v * 100) / 100 || 0;
+    }
+    return ref;
   }
 
   /* ── entrada principal ── */
@@ -1065,8 +1245,8 @@
     try {
       if (texto != null && typeof texto !== 'string') texto = decodificar(texto);
       texto = consertarMojibake(String(texto || '').replace(/^\ufeff/, ''));
-      if (!texto.trim()) return { formato: 'texto', banco: null, conta: null, transacoes: [], avisos: ['O arquivo está vazio.'] };
-      if (/^\s*%PDF/.test(texto)) return { formato: 'texto', banco: null, conta: null, transacoes: [], avisos: ['Isto é um PDF: extraia o texto dele (lerTexto) ou exporte o extrato em OFX ou CSV.'] };
+      if (!texto.trim()) return { formato: 'texto', banco: null, conta: null, transacoes: [], avisos: ['O arquivo está vazio.'], referencia: referenciaVazia() };
+      if (/^\s*%PDF/.test(texto)) return { formato: 'texto', banco: null, conta: null, transacoes: [], avisos: ['Isto é um PDF: extraia o texto dele (lerTexto) ou exporte o extrato em OFX ou CSV.'], referencia: referenciaVazia() };
       if (/OFXHEADER|<OFX>|<OFC>|<STMTTRN>/i.test(texto.slice(0, 4000)) || /<STMTTRN>/i.test(texto)) {
         const r = lerOFX(texto, Object.assign({ nome }, opcoes));
         if (!r.banco) r.banco = bancoPorTexto(nome);
@@ -1079,7 +1259,7 @@
       if (!t.banco) t.banco = bancoPorTexto(nome);
       return t;
     } catch (e) {
-      return { formato: 'texto', banco: null, conta: null, transacoes: [], avisos: ['Não consegui ler o arquivo (' + ((e && e.message) || 'erro') + ').'] };
+      return { formato: 'texto', banco: null, conta: null, transacoes: [], avisos: ['Não consegui ler o arquivo (' + ((e && e.message) || 'erro') + ').'], referencia: referenciaVazia() };
     }
   }
 

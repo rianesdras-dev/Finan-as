@@ -38,6 +38,21 @@ tela de início.
 O cartão da mãe é um envelope à parte, só para mercado: não entra como receita, porque
 esse dinheiro não sobra para a reserva.
 
+- **Feito para TDAH:** no topo do painel, o cartão **Agora** mostra só o próximo passo
+  (no máximo 3, cada um com um botão); **revisão de 5 minutos** guiada, um passo por
+  tela, contando semanas seguidas; lista **Quero comprar** com espera de 48 h;
+  comemoração ao pagar; lembretes no calendário do celular (.ics).
+- **Conferir a fatura:** escolha a fatura (CSV, OFX, PDF). O app (`conferencia.js`)
+  casa cada cobrança com as assinaturas e parcelas do plano e com o que você lançou, e
+  só pergunta o que precisa, um cartão por vez: duplicadas, cobranças que você não
+  reconhece (vão para “pra contestar”), assinatura que subiu de preço, assinatura ou
+  parcelamento novo, o que estava no plano e não veio, e se o total impresso bate.
+- **Comprovantes:** ao marcar uma conta como paga, “📎 comprovante” guarda a foto ou o
+  PDF (`comprovantes.js`, IndexedDB, só no celular). O app lê valor e data do PDF e
+  sugere de qual conta é. No Android dá pra “Compartilhar › Financeiro” direto do app
+  do banco. Backup de todos em .zip.
+- **Privado:** cadeado com PIN, modo discreto (o 👁 esconde os valores), fora do Google.
+
 ## Dados
 
 Ficam só no aparelho (localStorage). **Nenhum dado pessoal está no código**: o site é

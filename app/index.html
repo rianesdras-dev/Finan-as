@@ -2007,7 +2007,7 @@ function shComp(){
   const cs = contasDoMes(m), porRef = {};
   L.forEach(r=>{ (porRef[r.ref] = porRef[r.ref] || []).push(r); });
   const linhaArq = r => `<div class="arq">
-      ${r.miniatura?`<img src="${r.miniatura}" alt="" class="thumb">`:`<span class="thumb pdf">PDF</span>`}
+      ${r.miniatura?`<img src="${r.miniatura}" alt="" class="thumb">`:`<span class="thumb pdf">${/pdf/.test(r.tipo||'')?'PDF':'ARQ'}</span>`}
       <span class="tx"><b>${esc(r.nome||'Comprovante')}</b><span>${r.valor!=null?brl(r.valor)+' · ':''}${r.data?ddmm(r.data):ddmm(r.criado.slice(0,10))}</span></span>
       <button class="btn sm" data-act="comp-ver" data-v="${r.id}">Ver</button>
       <button class="x" data-act="comp-apagar" data-v="${r.id}" aria-label="Apagar comprovante" style="font-size:20px;color:var(--mut)">${UI.conf==='apagar:'+r.id?'<span class="warn" style="font-size:13px">apagar?</span>':'×'}</button></div>`;
@@ -2020,7 +2020,7 @@ function shComp(){
       return `<div style="padding:10px 16px">
         <div style="display:flex;align-items:center;gap:10px">
           <span class="tx" style="flex:1;min-width:0"><b style="font-weight:500">${esc(c.nome)}</b>
-            <span class="tiny ${arqs.length?'ok':st.k==='pago'?'warn':'mut'}" style="display:block">${arqs.length?'✓ comprovante guardado':st.k==='pago'?'paga, sem comprovante':esc(st.t)}</span></span>
+            <span class="tiny ${arqs.length?'ok':'mut'}" style="display:block">${arqs.length?'✓ comprovante guardado':st.k==='pago'?'paga, sem comprovante':esc(st.t)}</span></span>
           <span class="num" style="font-size:16px">${brl(c.v,0)}</span>
           <button class="btn sm${!arqs.length&&st.k==='pago'?' pri':''}" data-act="comp-add" data-ref="${c.id}" data-m="${m}">${arqs.length?'+':'Anexar'}</button></div>
         ${arqs.map(linhaArq).join('')}</div>`;}).join('')}</div></div>
@@ -2140,7 +2140,7 @@ function shConf(){
   }
   const c = F.fila[F.i], n = F.fila.length, dec = F.dec[chaveDec(c)] || {};
   const prog = `<div class="passos" aria-label="${F.i+1} de ${n}">${F.fila.map((_,k)=>`<i class="${k<=F.i?'on':''}"></i>`).join('')}</div>
-    <div class="tiny mut" style="margin-bottom:8px">${F.i+1} de ${n}</div>`;
+    <div class="tiny mut" style="margin-bottom:8px">${F.i+1} de ${n} · ${n-F.i<=4?'menos de 1 min':'~'+Math.ceil((n-F.i)*15/60)+' min'}</div>`;
   const bts = (pares) => `<div class="btns" style="margin-top:14px">${pares.map(([a,t,pri])=>`<button class="btn${pri?' pri':''}" data-act="cf-dec" data-v="${a}">${t}</button>`).join('')}</div>`;
   let corpo = '';
   if(c.tipo==='dup') corpo = `<div class="big" style="font-size:22px;margin-bottom:10px">Cobrança duplicada?</div>
@@ -2179,7 +2179,9 @@ function shConf(){
     <div class="small mut2">Você lançou no cartão, mas não está nesta fatura. Normalmente vem na próxima.</div>${bts([['ok','Entendi',1]])}`;
   else if(c.tipo==='total') corpo = `<div class="big" style="font-size:22px;margin-bottom:10px">O total não bate</div>
     <div class="small mut2">Total impresso ${brl(R.totalImpresso)}, soma das linhas ${brl(R.totalCalculado)} (diferença ${brl(Math.abs(R.diferencaTotal))}). Pode ser cartão adicional, ajuste ou juros de fatura anterior — vale olhar no app do banco.</div>${bts([['ok','Entendi',1]])}`;
-  return hd + resumo + prog + corpo + (F.i ? '<button class="btn ghost blk" data-act="cf-volta" style="margin-top:4px">voltar</button>' : '');
+  return hd + resumo + prog + corpo + `<div class="btns" style="margin-top:4px">${F.i?'<button class="btn ghost" data-act="cf-volta">voltar</button>':''}
+    ${['rec','dup','valor','ass','parc'].includes(c.tipo)?'<button class="btn ghost" data-act="cf-pular">pular</button>':''}</div>
+    <div class="tiny mut" style="text-align:center">Pular usa o palpite do app; dá pra conferir de novo depois.</div>`;
 }
 function aplicarConferencia(){
   const F = UI.cf, R = F.rel, m = F.m, feito = new Set(); snap();
@@ -2532,6 +2534,7 @@ document.addEventListener('click', e => {
       vibrar(10);
       if(F.i < F.fila.length-1) F.i++; else F.etapa = 'fim';
       renderSheet(); document.getElementById('sheet').scrollTop = 0; break; }
+    case 'cf-pular': { const F = UI.cf; if(F.i < F.fila.length-1) F.i++; else F.etapa = 'fim'; renderSheet(); break; }
     case 'cf-volta': { const F = UI.cf; if(F.etapa==='fim') F.etapa = 'cartas'; else if(F.i) F.i--; renderSheet(); break; }
     case 'cf-ok': aplicarConferencia(); break;
     case 'contest-ok': { const x = S.contestar.find(c=>c.id===v); if(x){ snap(); x.status = 'resolvida'; save(); render(); toast('Marcada como resolvida ✓', true); } break; }
