@@ -3,3 +3,6 @@ node_modules/
 # dados pessoais exportados do app nunca entram no repositório (ele é público)
 *.json
 !app/manifest.webmanifest
+!package.json
+!package-lock.json
+node_modules/

@@ -1,7 +1,7 @@
 /* Financeiro — funciona sem internet. Arquivos do app: rede primeiro, cópia
    guardada se estiver offline. Fontes do Google: cópia guardada primeiro. */
-const CACHE = 'financeiro-v4';
-const CORE = ['./', 'index.html', 'extrato.js', 'conferencia.js', 'comprovantes.js', 'agenda.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+const CACHE = 'financeiro-v5';
+const CORE = ['./', 'index.html', 'extrato.js', 'conferencia.js', 'comprovantes.js', 'agenda.js', 'sincronia.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.all(CORE.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));
@@ -30,6 +30,7 @@ self.addEventListener('fetch', e => {
   }
   if (r.method !== 'GET') return;
   const u = new URL(r.url);
+  if (u.pathname.includes('/api/')) return;   // a sincronização vai sempre à rede
   const fonte = u.hostname === 'fonts.googleapis.com' || u.hostname === 'fonts.gstatic.com';
   if (u.origin !== location.origin && !fonte) return;
   const guarda = res => { if (res && (res.ok || res.type === 'opaque')) { const cp = res.clone(); caches.open(CACHE).then(c => c.put(r, cp)); } return res; };

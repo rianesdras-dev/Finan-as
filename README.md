@@ -53,6 +53,14 @@ esse dinheiro não sobra para a reserva.
   do banco. Backup de todos em .zip.
 - **Privado:** cadeado com PIN, modo discreto (o 👁 esconde os valores), fora do Google.
 
+- **Celular e computador:** Ajustes › “Usar no celular e no computador” › Ligar. Aparece um
+  link/QR e um código; abra no outro aparelho e pronto, os dois ficam iguais (inclusive
+  comprovantes). Tudo é **criptografado no aparelho** com o código (`app/sincronia.js`);
+  a função `netlify/functions/sync.mjs` guarda só bytes cifrados no Netlify Blobs.
+- **Editar em tabela:** Mês › “✎ Editar tudo em tabela” (ou Ajustes): contas, cartão,
+  entradas e gastos em linhas, como na planilha; muda na hora. No computador a tela fica
+  larga, em duas colunas.
+
 ## Dados
 
 Ficam só no aparelho (localStorage). **Nenhum dado pessoal está no código**: o site é
@@ -73,7 +81,8 @@ O app é estático; não tem build.
 - **Pelo GitHub (atualiza sozinho a cada push):** no Netlify, *Site configuration ›
   Build & deploy › Link repository*, escolha este repositório e o branch `main`. O
   `netlify.toml` já diz para publicar a pasta `app/` (sem build).
-- **Arrastando:** em *Deploys*, arraste a pasta `app` inteira.
+- **Arrastando:** em *Deploys*, arraste a pasta `app` inteira. *Assim a sincronização
+  não funciona* (a função só é publicada pelo GitHub).
 
 ## Pastas
 

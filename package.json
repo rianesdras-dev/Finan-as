@@ -1,0 +1,7 @@
+{
+  "name": "financeiro",
+  "private": true,
+  "description": "App pessoal de finanças. O site é app/; a sincronização entre aparelhos é netlify/functions/sync.mjs.",
+  "scripts": { "test": "node --test testes/" },
+  "dependencies": { "@netlify/blobs": "^8.2.0" }
+}

@@ -560,6 +560,19 @@
     } catch (e) { throw traduz(e, 'Não consegui guardar o comprovante. Tente de novo.'); }
   }
 
+  /** Grava um comprovante que veio de outro aparelho (sincronização), com o mesmo id e dados. */
+  async function importar(registro, bytes) {
+    try {
+      if (!registro || typeof registro.id !== 'string' || !registro.id || typeof registro.ref !== 'string') throw erro('Comprovante inválido.');
+      const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+      const db = await banco();
+      const tx = db.transaction([LOJA, LOJA_CONTEUDO], 'readwrite');
+      tx.objectStore(LOJA).put(Object.assign({}, registro, { tamanho: b.byteLength }));
+      tx.objectStore(LOJA_CONTEUDO).put({ id: registro.id, bytes: b });
+      await fimTx(tx);
+    } catch (e) { throw traduz(e, 'Não consegui gravar o comprovante sincronizado.'); }
+  }
+
   /** Dados dos comprovantes (sem os arquivos), mais novo primeiro. filtro = { ref?, mes? } */
   async function listar(filtro) {
     try {
@@ -731,7 +744,7 @@
   }
 
   raiz.Comprovantes = {
-    abrir, salvar, listar, obter, apagar, uso, lerInfo, sugerir, exportarZip,
+    abrir, salvar, listar, obter, apagar, uso, lerInfo, sugerir, exportarZip, importar,
     _crc32: crc32, _zip: zip, _achaValor: achaValor, _achaData: achaData, _achaNomes: achaNomes,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

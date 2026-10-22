@@ -1,3 +1,7 @@
-# Site estático, sem build: o Netlify publica só a pasta app/.
+# Site estático em app/ (sem build) + uma função para sincronizar entre aparelhos.
 [build]
   publish = "app"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"

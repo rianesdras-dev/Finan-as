@@ -6,3 +6,4 @@ import './ataque-formatos.test.mjs';
 import './comprovantes.test.mjs';
 import './agenda.test.mjs';
 import './conferencia.test.mjs';
+import './sincronia.test.mjs';

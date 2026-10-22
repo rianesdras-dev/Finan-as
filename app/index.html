@@ -275,6 +275,22 @@ details.como p{margin:0 0 8px}
 .discreto .big,.discreto .num,.discreto .v,.discreto .mv,.discreto .dv,.discreto .tb td:not(:first-child){filter:blur(8px)}
 .discreto #sheet .big,.discreto #sheet .v,.discreto #sheet .num{filter:none}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.tbl{display:flex;flex-direction:column;gap:8px}
+.tl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px;border:1px solid var(--div);background:var(--card)}
+.tl .inp{min-height:40px;padding:6px 8px;font-size:15px}
+.tl select.inp{padding:6px 4px}
+.tparc{display:flex;align-items:center;gap:4px}
+.tparc .inp{width:56px;text-align:center}
+@media (max-width:899px){.sopc{display:none}}
+@media (min-width:900px){
+  #shell,#nav{max-width:1040px}
+  #view{display:block;columns:2;column-gap:18px}
+  #view>*{break-inside:avoid;margin-bottom:18px;display:block}
+  #view>.btns,#view>.seg{display:flex}
+  #sheet{max-width:760px}
+  #backdrop.full #sheet{max-width:1040px}
+  .tl{flex-wrap:nowrap}
+}
 .dh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:12px 16px 2px;border-top:1px solid var(--div)}
 .dh:first-child{border-top:0}
 </style>
@@ -303,6 +319,7 @@ details.como p{margin:0 0 8px}
 <script src="conferencia.js"></script>
 <script src="comprovantes.js"></script>
 <script src="agenda.js"></script>
+<script src="sincronia.js"></script>
 <script>
 "use strict";
 /* ════════════════════════════════════════════════════════════════════
@@ -427,6 +444,7 @@ function load(){
 function save(){
   try{ localStorage.setItem(KEY, JSON.stringify(S)); }
   catch(e){ toast('Não deu pra salvar neste aparelho'); }
+  if(typeof marcarSujo === 'function') marcarSujo();
 }
 let S, UI = {tab:'painel', sub:'plano', mes:MES(), sheet:null, add:null, ed:null, sel:null, selF:null, aberta:null, conf:null, sim:500, imp:null};
 let undoSnap = null, toastT = null;
@@ -707,6 +725,9 @@ function agoraItens(){
     const z = S.zipEm ? diasEntre(H, S.zipEm) : 999;
     if(z >= 30 && UI.compUso && UI.compUso.n) it.push({p:8, t:'Backup dos comprovantes', sub:'estão só neste celular', bt:'Baixar', attr:'data-act="comp-zip"'});
   }
+  const si = typeof syncInfo==='function' ? syncInfo() : null;
+  if(si && si.erro && (!si.em || Date.now() - new Date(si.em) > 864e5))
+    it.push({p:3, t:'A nuvem não está sincronizando', sub:'os outros aparelhos podem estar desatualizados', bt:'Ver', attr:'data-act="sync"'});
   if(!S.agendaEm && window.Agenda && contasDoMes(M).some(c=>c.dia && !c.auto))
     it.push({p:9, t:'Lembretes no calendário', sub:'o celular avisa antes de cada conta vencer', bt:'Criar', attr:'data-act="agenda"'});
   return it.sort((a,b)=>a.p-b.p);
@@ -1029,7 +1050,8 @@ function vBoasVindas(){
     <div style="font-weight:600;margin-bottom:4px">Já tem seus dados num arquivo?</div>
     <div class="small mut2" style="margin-bottom:12px">Se você recebeu o arquivo <b>.json</b> (ou um link de importação), é só abrir aqui. Fica tudo só neste aparelho.</div>
     <button class="btn pri blk" data-act="importar">Importar meus dados</button>
-    <button class="btn blk" data-act="zero" style="margin-top:8px">Começar do zero</button>
+    <button class="btn blk" data-act="sync" style="margin-top:8px">Já uso em outro aparelho</button>
+    <button class="btn blk ghost" data-act="zero" style="margin-top:4px">Começar do zero</button>
     ${temV1?`<div class="tiny mut" style="margin-top:10px">Achei ${temV1} lançamento${temV1>1?'s':''} da versão antiga do app. Eles continuam aqui.</div>`:''}
   </div>`;
 }
@@ -1068,7 +1090,7 @@ function vGastos(){
       <div class="tiny ${v>t&&t>0?'warn':'mut'}">de ${brl(t,0)}</div></div>`).join('')}</div>
   </div>`);
 
-  out.push(`<button class="btn blk" data-act="ext">Importar extrato do banco</button>`);
+  out.push(`<div class="btns"><button class="btn" data-act="ext">Importar extrato</button><button class="btn" data-act="tabela" data-v="gastos">✎ Editar em tabela</button></div>`);
   if(!g.L.length){
     out.push(`<div class="card empty" style="padding:18px 16px">Nenhum gasto em ${mesNome(m)} ainda. Lance pelo + ou importe o extrato.</div>`);
     return out.join('');
@@ -1122,7 +1144,7 @@ function vMes(){
   return seg + (UI.sub==='gastos' ? vGastos() : vPlano());
 }
 function vPlano(){
-  const m = UI.mes, P = plano(m), out = [];
+  const m = UI.mes, P = plano(m), out = [`<button class="btn blk" data-act="tabela" data-v="contas">✎ Editar tudo em tabela</button>`];
   const cs = contasDoMes(m);
   const ok = cs.filter(c=>resolvida(c,m));
   const linha = (t,v,cls='',sinal='') => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:5px 0">
@@ -1403,10 +1425,11 @@ function vFuturo(){
 function renderSheet(){
   const bd = document.getElementById('backdrop'), sh = document.getElementById('sheet');
   if(!UI.sheet){ bd.classList.remove('on','full'); sh.innerHTML=''; document.body.style.overflow=''; return; }
-  bd.classList.add('on'); bd.classList.toggle('full', ['ajustes','ext','comp','conf'].includes(UI.sheet));
+  bd.classList.add('on'); bd.classList.toggle('full', ['ajustes','ext','comp','conf','tabela'].includes(UI.sheet));
   document.body.style.overflow='hidden';
-  const f = {add:shAdd, item:shItem, reserva:shReserva, sim:shSim, ajustes:shAjustes, obj:shObj, imp:shImp, cen:shCen, ext:shExt, pin:shPin, rev:shRev, desejo:shDesejo, comp:shComp, compqual:shCompQual, conf:shConf}[UI.sheet];
+  const f = {add:shAdd, item:shItem, reserva:shReserva, sim:shSim, ajustes:shAjustes, obj:shObj, imp:shImp, cen:shCen, ext:shExt, sync:shSync, tabela:shTabela, pin:shPin, rev:shRev, desejo:shDesejo, comp:shComp, compqual:shCompQual, conf:shConf}[UI.sheet];
   sh.innerHTML = f ? f() : '';
+  if(UI.sheet==='sync' && syncInfo()) mostrarQR();
 }
 function abrir(s){ UI.sheet = s; UI.conf = null; renderSheet(); document.getElementById('sheet').scrollTop = 0; }
 function fechar(){ UI.sheet = null; UI.add = null; UI.ed = null; UI.conf = null; UI.ext = null; UI.cen = null; renderSheet(); }
@@ -1976,6 +1999,7 @@ async function salvarComp(file, ref, m, info){
   }catch(e){ toast((e && e.message) || 'Não deu pra guardar o arquivo'); return; }
   if(c && !resolvida(c,m)){ snap(); (S.pagos[m] = S.pagos[m]||{})[ref] = (info && info.data) || HOJE(); save(); }
   vibrar(); toast('Comprovante guardado ✓' + (c ? ' · ' + c.nome : ''));
+  if(syncLigado()) sincronizar();
   if(UI.sheet==='compqual') fechar();
   render(); atualizaSemComp(true);
   if(UI.sheet==='comp') carregarCofre();
@@ -2242,6 +2266,259 @@ function gerarAgenda(){
   toast('Abra o arquivo baixado e adicione ao calendário 📅');
 }
 
+/* ══════════════════ usar em mais de um aparelho ══════════════════
+   sincronia.js cifra tudo aqui; a função /api/sync guarda só bytes
+   cifrados. O código fica neste aparelho (financeiro-sync), fora do backup. */
+const KEY_SYNC = 'financeiro-sync', URL_SYNC = 'api/sync';
+let SY = null, syncRodando = null, syncDeNovo = false, syncT = null;
+const syncInfo = () => { try{ return JSON.parse(localStorage.getItem(KEY_SYNC)) || null; }catch(_){ return null; } };
+const syncGuardar = i => { try{ if(i) localStorage.setItem(KEY_SYNC, JSON.stringify(i)); else localStorage.removeItem(KEY_SYNC); }catch(_){} };
+const syncLigado = () => !!(syncInfo() && window.Sincronia && window.crypto && crypto.subtle);
+async function syncPreparar(){
+  const i = syncInfo(); if(!i || !i.codigo || !window.Sincronia) return false;
+  if(!SY || SY.codigo !== i.codigo) SY = Object.assign({codigo:i.codigo}, await Sincronia.derivar(i.codigo));
+  return true;
+}
+async function syncBaixar(){
+  const r = await fetch(`${URL_SYNC}?id=${SY.id}&k=estado`, {cache:'no-store'});
+  if(r.status === 404) return null;
+  if(!r.ok) throw new Error('A nuvem respondeu ' + r.status);
+  const versao = +r.headers.get('X-Versao') || 0;
+  const estado = JSON.parse(new TextDecoder().decode(await Sincronia.decifrar(SY.chave, await r.arrayBuffer())));
+  return {versao, estado};
+}
+async function syncEnviar(base){
+  const corpo = await Sincronia.cifrar(SY.chave, JSON.stringify(S));
+  const r = await fetch(`${URL_SYNC}?id=${SY.id}&k=estado`, {method:'PUT', body:corpo, headers:{'X-Token':SY.token, 'X-Base':String(base)}});
+  if(r.status === 409) return {conflito:true};
+  if(!r.ok) throw new Error('A nuvem respondeu ' + r.status);
+  return {versao: +r.headers.get('X-Versao') || base + 1};
+}
+// grava o estado que veio da nuvem sem marcar como “mudou aqui”
+function aplicarRemoto(estado){
+  S = normaliza(estado);
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(_){}
+  renderView(); if(!UI.sheet || ['sync','ajustes'].includes(UI.sheet)) renderSheet();
+}
+function sincronizar(){
+  if(!syncLigado()) return Promise.resolve();
+  if(syncRodando){ syncDeNovo = true; return syncRodando; }
+  syncRodando = (async () => {
+    const i = syncInfo();
+    try{
+      await syncPreparar();
+      for(let tent = 0; tent < 3; tent++){
+        const remoto = await syncBaixar();
+        if(remoto && remoto.versao > (i.versao||0)){
+          if(i.sujo) S = normaliza(Sincronia.mesclar(S, remoto.estado));
+          else aplicarRemoto(remoto.estado);
+          i.versao = remoto.versao;
+        }
+        if(remoto && !i.sujo){ syncGuardar(i); break; }
+        const r = await syncEnviar(remoto ? remoto.versao : 0);
+        if(r.conflito) continue;
+        i.versao = r.versao; i.sujo = false; syncGuardar(i);
+        if(remoto) aplicarRemoto(S);
+        break;
+      }
+      await syncComprovantes();
+      Object.assign(i, syncInfo(), {em:new Date().toISOString(), erro:null}); syncGuardar(i);
+    }catch(e){
+      const j = syncInfo(); if(j){ j.erro = (e && e.message) || 'sem conexão'; syncGuardar(j); }
+    }finally{
+      syncRodando = null;
+      if(UI.sheet==='sync') renderSheet();
+      if(syncDeNovo){ syncDeNovo = false; sincronizar(); }
+    }
+  })();
+  return syncRodando;
+}
+function marcarSujo(){
+  const i = syncInfo(); if(!i) return;
+  if(!i.sujo){ i.sujo = true; syncGuardar(i); }
+  clearTimeout(syncT); syncT = setTimeout(sincronizar, 1500);
+}
+// comprovantes: cada um vai cifrado como um arquivo; S.compSync diz quais existem (0 = apagado)
+async function syncComprovantes(){
+  if(!window.Comprovantes) return;
+  S.compSync = S.compSync || {};
+  const locais = await Comprovantes.listar(), aqui = new Set(locais.map(r=>r.id));
+  let mudou = false;
+  for(const r of locais){
+    if(S.compSync[r.id] === 0){ await Comprovantes.apagar(r.id); continue; }
+    if(S.compSync[r.id] !== 1){
+      const o = await Comprovantes.obter(r.id); if(!o) continue;
+      const reg = new TextEncoder().encode(JSON.stringify(o.registro)), arq = new Uint8Array(await o.blob.arrayBuffer());
+      const pacote = new Uint8Array(4 + reg.length + arq.length);
+      new DataView(pacote.buffer).setUint32(0, reg.length); pacote.set(reg, 4); pacote.set(arq, 4 + reg.length);
+      const res = await fetch(`${URL_SYNC}?id=${SY.id}&k=c-${r.id}`, {method:'PUT', body: await Sincronia.cifrar(SY.chave, pacote), headers:{'X-Token':SY.token}});
+      if(!res.ok) throw new Error('Não deu pra enviar um comprovante (' + res.status + ')');
+      S.compSync[r.id] = 1; mudou = true;
+    }
+  }
+  for(const [id, v] of Object.entries(S.compSync)){
+    if(v === 0 && !aqui.has(id)) continue;
+    if(v === 1 && !aqui.has(id)){
+      const res = await fetch(`${URL_SYNC}?id=${SY.id}&k=c-${id}`, {cache:'no-store'});
+      if(!res.ok) continue;
+      const b = await Sincronia.decifrar(SY.chave, await res.arrayBuffer());
+      const n = new DataView(b.buffer, b.byteOffset).getUint32(0);
+      await Comprovantes.importar(JSON.parse(new TextDecoder().decode(b.slice(4, 4 + n))), b.slice(4 + n));
+      atualizaSemComp(true);
+    }
+  }
+  if(mudou){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(_){} const j = syncInfo(); if(j){ j.sujo = true; syncGuardar(j); } syncDeNovo = true; }
+}
+async function apagarCompNuvem(id){
+  S.compSync = S.compSync || {}; S.compSync[id] = 0; save();
+  if(syncLigado() && await syncPreparar()) fetch(`${URL_SYNC}?id=${SY.id}&k=c-${id}`, {method:'DELETE', headers:{'X-Token':SY.token}}).catch(()=>{});
+}
+const linkSync = c => location.origin + location.pathname.replace(/index\.html$/,'') + '#sync=' + c;
+async function ligarSync(){
+  const codigo = Sincronia.novoCodigo();
+  syncGuardar({codigo, versao:0, sujo:true});
+  UI.syncMsg = 'Enviando seus dados…'; renderSheet();
+  await sincronizar();
+  const i = syncInfo(); UI.syncMsg = i && i.erro ? 'Ligado, mas ainda não deu pra enviar: ' + i.erro : '';
+  renderSheet(); mostrarQR();
+}
+async function conectarSync(texto){
+  const codigo = window.Sincronia && Sincronia.normalizar(texto);
+  if(!codigo){ UI.syncMsg = 'Esse código não parece certo. São 20 letras e números (ex.: K7Q2M-9XPDA-4TRWZ-H3NBE).'; renderSheet(); return; }
+  UI.syncMsg = 'Procurando seus dados…'; renderSheet();
+  const antes = syncInfo();
+  try{
+    syncGuardar({codigo, versao:0, sujo:false}); SY = null; await syncPreparar();
+    const remoto = await syncBaixar();
+    if(!remoto){ syncGuardar(antes); UI.syncMsg = 'Não achei dados com esse código. Confira no outro aparelho (Ajustes › Celular e computador).'; renderSheet(); return; }
+    const vazioAqui = S.novo || S.itens.filter(i=>i.tipo!=='mae').length === 0;
+    if(vazioAqui){ syncGuardar({codigo, versao:remoto.versao, sujo:false}); aplicarRemoto(remoto.estado); UI.syncMsg = ''; fechar(); render();
+      toast('Pronto! Mesmos dados do outro aparelho ✓'); sincronizar(); return; }
+    UI.syncEscolha = {codigo, remoto}; UI.syncMsg = ''; renderSheet();
+  }catch(e){ syncGuardar(antes); UI.syncMsg = (e && e.message) || 'Sem conexão. Tente de novo.'; renderSheet(); }
+}
+function escolherSync(modo){
+  const E = UI.syncEscolha; if(!E) return;
+  if(modo === 'nuvem'){ syncGuardar({codigo:E.codigo, versao:E.remoto.versao, sujo:false}); aplicarRemoto(E.remoto.estado); }
+  else { S = normaliza(Sincronia.mesclar(S, E.remoto.estado)); syncGuardar({codigo:E.codigo, versao:E.remoto.versao, sujo:true}); save(); }
+  UI.syncEscolha = null; fechar(); render(); sincronizar();
+  toast(modo === 'nuvem' ? 'Pronto! Mesmos dados do outro aparelho ✓' : 'Juntei os dois ✓');
+}
+function mostrarQR(){
+  const el = document.getElementById('qr'), i = syncInfo(); if(!el || !i) return;
+  const desenha = () => { el.innerHTML = ''; try{ new QRCode(el, {text:linkSync(i.codigo), width:184, height:184, correctLevel:QRCode.CorrectLevel.M}); }catch(_){ } };
+  if(window.QRCode) desenha();
+  else carregarScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js').then(desenha).catch(()=>{ el.innerHTML = '<span class="tiny mut">QR precisa de internet</span>'; });
+}
+const quando = iso => { if(!iso) return 'nunca'; const s = (Date.now() - new Date(iso))/1000;
+  return s < 60 ? 'agora há pouco' : s < 3600 ? 'há ' + Math.round(s/60) + ' min' : s < 86400 ? 'há ' + Math.round(s/3600) + ' h' : 'em ' + ddmm(iso.slice(0,10)); };
+function shSync(){
+  const i = syncInfo();
+  const hd = `<div class="sh-hd"><h2>Celular e computador</h2><button class="x" data-act="fechar">fechar</button></div>`;
+  const msg = UI.syncMsg ? `<div class="nota" style="margin:10px 0">${esc(UI.syncMsg)}</div>` : '';
+  if(!window.Sincronia || !(window.crypto && crypto.subtle)) return hd + '<div class="nota warn-n">Este navegador não permite sincronizar (precisa abrir o app pelo endereço https).</div>';
+  if(UI.syncEscolha) return hd + `<div class="big" style="font-size:22px;margin-bottom:8px">Este aparelho já tem dados</div>
+    <div class="small mut2" style="margin-bottom:12px">O que fazer com os dados daqui?</div>
+    <button class="btn pri blk" data-act="sync-escolha" data-v="nuvem" style="min-height:52px">Usar os da nuvem (substitui os daqui)</button>
+    <button class="btn blk" data-act="sync-escolha" data-v="juntar" style="margin-top:8px">Juntar os dois</button>`;
+  if(!i) return hd + `
+    <div class="small mut2" style="margin-bottom:14px">Seus dados ficam guardados na nuvem <b>criptografados com um código que só você tem</b>. Nem o servidor consegue ler. Em qualquer aparelho com o código, tudo aparece igual, inclusive os comprovantes.</div>
+    <button class="btn pri blk" data-act="sync-ligar" style="min-height:52px">Ligar neste aparelho</button>
+    ${msg}
+    <div class="lbl" style="margin:20px 0 6px">já ligou em outro aparelho?</div>
+    <input class="inp" id="sync-cod" placeholder="cole o código ou o link" autocomplete="off" autocapitalize="characters" value="${esc(UI.syncCod||'')}">
+    <button class="btn blk" data-act="sync-conectar" style="margin-top:8px">Conectar</button>`;
+  return hd + `
+    <div class="small" style="margin-bottom:6px">${i.erro ? `<span class="warn">⚠ ${esc(i.erro)}</span>` : i.sujo ? 'Enviando mudanças…' : '✓ Sincronizado ' + quando(i.em)}</div>
+    ${msg}
+    <div class="card" style="text-align:center;margin:10px 0">
+      <div class="lbl" style="margin-bottom:8px">no outro aparelho, abra este link ou leia o QR</div>
+      <div id="qr" style="display:flex;justify-content:center;min-height:184px;align-items:center"></div>
+      <div class="num" style="font-size:20px;margin-top:10px;letter-spacing:.06em">${esc(i.codigo)}</div>
+      <div class="btns" style="margin-top:10px"><button class="btn sm" data-act="sync-copiar" data-v="link">Copiar link</button><button class="btn sm" data-act="sync-copiar" data-v="codigo">Copiar código</button></div>
+    </div>
+    <div class="small mut2">Guarde o código num lugar seguro (ex.: gerenciador de senhas). Quem tiver o código vê seus dados; sem ele, não dá pra recuperar a nuvem — mas os dados deste aparelho continuam aqui.</div>
+    <button class="btn blk" data-act="sync-agora" style="margin-top:12px">Sincronizar agora</button>
+    <button class="btn ghost blk dng" data-act="sync-desligar" style="margin-top:6px">${UI.conf==='sync-off'?'Toque de novo para desligar':'Desligar neste aparelho'}</button>`;
+}
+
+/* ══════════════════ editar em tabela (como a planilha) ══════════════════ */
+function abrirTabela(aba){ UI.tbAba = aba || UI.tbAba || 'contas'; abrir('tabela'); }
+function shTabela(){
+  const aba = UI.tbAba, m = UI.mes;
+  const abas = [['contas','Contas e cartão'],['entradas','Entradas'],['gastos','Gastos de '+ymRot(m)]];
+  const hd = `<div class="sh-hd"><h2>Editar em tabela</h2><button class="x" data-act="fechar">✕ fechar</button></div>
+    <div class="row2" style="align-items:center;margin-bottom:10px">
+      <div class="seg" style="flex:3">${abas.map(([k,n])=>`<button class="${aba===k?'on':''}" data-act="tb-aba" data-v="${k}">${n}</button>`).join('')}</div>
+      <div class="mswitch" style="flex:none"><button data-act="tb-mes" data-v="-1" aria-label="Mês anterior">‹</button><span>${ymRot(m)}</span><button data-act="tb-mes" data-v="1" aria-label="Próximo mês">›</button></div></div>
+    <div class="tiny mut" style="margin-bottom:8px">Muda na hora. Valor novo vale de ${ymRot(m)} em diante.</div>`;
+  if(aba === 'gastos'){
+    const L = S.lanc.filter(l=>l.d.slice(0,7)===m).sort((a,b)=>a.d<b.d?1:-1);
+    return hd + `<div class="tbl">${L.map(l=>`<div class="tl" data-id="${l.id}">
+      <input class="inp" type="date" data-tb="d" value="${l.d}" aria-label="Data" style="flex:0 0 148px">
+      <input class="inp" data-tb="t" value="${esc(l.t||'')}" placeholder="${esc((CAT[l.c]||CAT.outros).n)}" aria-label="Descrição" style="flex:1 1 180px">
+      <select class="inp" data-tb="c" aria-label="Categoria" style="flex:0 0 132px">${CATS.map(c=>`<option value="${c.k}"${l.c===c.k?' selected':''}>${c.n}</option>`).join('')}</select>
+      <select class="inp" data-tb="f" aria-label="Forma" style="flex:0 0 124px">${FORMAS().map(([k,n])=>`<option value="${k}"${l.f===k?' selected':''}>${esc(n)}</option>`).join('')}</select>
+      <input class="inp n" data-tb="v" inputmode="decimal" value="${fmtIn(l.v)}" aria-label="Valor" style="flex:0 0 108px;text-align:right">
+      <button class="x" data-act="tb-del" data-v="${l.id}" aria-label="Apagar" style="flex:0 0 32px;font-size:20px;color:var(--mut)">${UI.conf==='tb:'+l.id?'<span class="warn" style="font-size:12px">apagar?</span>':'×'}</button></div>`).join('')
+      || '<div class="empty">Nenhum gasto neste mês.</div>'}</div>
+      <button class="btn blk" data-act="tb-novo" style="margin-top:10px">+ gasto</button>`;
+  }
+  const tipos = aba === 'entradas' ? ['entrada'] : ['conta','cartao'];
+  const L = S.itens.filter(it=>tipos.includes(it.tipo) && ativo(it,m));
+  const tot = L.reduce((s,it)=>s+valor(it,m),0);
+  return hd + `<div class="tbl">${L.map(it=>{
+    const rep = it.n ? 'parc' : it.ate ? 'ate' : 'sempre';
+    return `<div class="tl" data-id="${it.id}">
+      <input class="inp" data-tb="nome" value="${esc(it.nome)}" aria-label="Nome" style="flex:1 1 180px">
+      ${aba==='entradas'?'':`<select class="inp" data-tb="tipo" aria-label="Onde paga" style="flex:0 0 116px"><option value="conta"${it.tipo==='conta'?' selected':''}>Conta</option><option value="cartao"${it.tipo==='cartao'?' selected':''}>No cartão</option></select>`}
+      <input class="inp n" data-tb="v" inputmode="decimal" value="${fmtIn(valor(it,m))}" aria-label="Valor" style="flex:0 0 108px;text-align:right">
+      ${it.tipo==='cartao'?'<span style="flex:0 0 64px"></span>':`<input class="inp n" data-tb="dia" inputmode="numeric" value="${it.dia||''}" placeholder="dia" aria-label="Dia" style="flex:0 0 64px;text-align:center">`}
+      <select class="inp" data-tb="rep" aria-label="Repete" style="flex:0 0 118px"><option value="sempre"${rep==='sempre'?' selected':''}>Todo mês</option><option value="parc"${rep==='parc'?' selected':''}>Parcelado</option><option value="ate"${rep==='ate'?' selected':''}>Até…</option></select>
+      ${rep==='parc'?`<span class="tparc" style="flex:0 0 150px"><input class="inp n" data-tb="k" inputmode="numeric" value="${parcK(it,m)}" aria-label="Parcela atual"><span>de</span><input class="inp n" data-tb="n" inputmode="numeric" value="${it.n}" aria-label="Total de parcelas"></span>`
+        : rep==='ate'?`<input class="inp" type="month" data-tb="ate" value="${it.ate||''}" aria-label="Último mês" style="flex:0 0 150px">`:'<span class="sopc" style="flex:0 0 150px"></span>'}
+      <button class="x" data-act="tb-del" data-v="${it.id}" aria-label="Tirar do plano" style="flex:0 0 32px;font-size:20px;color:var(--mut)">${UI.conf==='tb:'+it.id?'<span class="warn" style="font-size:12px">tirar?</span>':'×'}</button></div>`;}).join('')
+    || '<div class="empty">Nada aqui neste mês.</div>'}</div>
+    <div class="tot" style="padding:10px 2px"><span>Total em ${ymRot(m)}</span><span class="num" id="tb-tot" style="font-size:18px">${brl(tot)}</span></div>
+    <button class="btn blk" data-act="tb-novo">+ ${aba==='entradas'?'entrada':'conta ou item do cartão'}</button>`;
+}
+function editarTabela(inp){
+  const linha = inp.closest('.tl'); if(!linha) return;
+  const id = linha.dataset.id, campo = inp.dataset.tb, m = UI.mes, val = inp.value;
+  if(UI.tbAba === 'gastos'){
+    const l = S.lanc.find(x=>x.id===id); if(!l) return;
+    if(campo==='v'){ const n = nnum(val); if(!n){ toast('Valor inválido'); return; } l.v = n; }
+    else if(campo==='d'){ if(!/^\d{4}-\d{2}-\d{2}$/.test(val)) return; l.d = val; }
+    else l[campo] = campo==='t' ? val.trim() : val;
+    save(); renderView(); if(campo==='d') renderSheet(); return;
+  }
+  const it = S.itens.find(x=>x.id===id); if(!it) return;
+  if(campo==='nome'){ if(!val.trim()) return; it.nome = val.trim(); }
+  else if(campo==='tipo'){ it.tipo = val; if(val==='cartao'){ delete it.dia; delete it.auto; } }
+  else if(campo==='v'){
+    const n = nnum(val); if(n === valor(it,m)) return;
+    it.hist = (it.hist||[]).filter(h=>h.de < m); if(it.so) delete it.so[m];
+    if(it.de && m <= it.de){ it.v = n; it.hist = []; } else it.hist.push({de:m, v:n});
+    if(!it.hist.length) delete it.hist;
+  }
+  else if(campo==='dia'){ const d = Math.min(Math.max(parseInt(val,10)||0,0),31); if(d) it.dia = d; else delete it.dia; }
+  else if(campo==='rep'){
+    delete it.n; delete it.ate;
+    if(val==='parc'){ it.n = 2; it.de = m; } else if(val==='ate') it.ate = ymAdd(m,2);
+  }
+  else if(campo==='k' || campo==='n'){
+    const linhaK = linha.querySelector('[data-tb="k"]'), linhaN = linha.querySelector('[data-tb="n"]');
+    const k = Math.max(parseInt(linhaK.value,10)||1,1), n = Math.max(parseInt(linhaN.value,10)||1,1);
+    if(k > n){ toast('A parcela não pode passar do total'); return; }
+    it.n = n; it.de = ymAdd(m, -(k-1));
+  }
+  else if(campo==='ate'){ if(val) it.ate = val < (it.de||m) ? (it.de||m) : val; }
+  save(); renderView();
+  if(campo==='tipo' || campo==='rep') renderSheet();
+  else { const t = document.getElementById('tb-tot'), tipos = UI.tbAba==='entradas' ? ['entrada'] : ['conta','cartao'];
+    if(t) t.textContent = brl(S.itens.filter(x=>tipos.includes(x.tipo) && ativo(x,m)).reduce((s,x)=>s+valor(x,m),0)); }
+}
+
 /* importar (confirmação) */
 function shImp(){
   const d = UI.imp; if(!d) return '';
@@ -2265,6 +2542,9 @@ function shAjustes(){
     <label class="fld"><span>Vence dia</span><input class="inp n" data-cfg="cartao.dia" inputmode="numeric" value="${S.cartao.dia||''}" placeholder="—"></label>
   </div>
   <div class="tiny mut" style="margin:-4px 0 4px">Com os dois dias, cada compra no cartão (e cada parcela nova) cai na fatura certa.</div>
+  <div class="lbl" style="margin:0 0 8px">celular e computador</div>
+  ${(()=>{ const i = syncInfo(); return `<button class="btn blk${i?'':' pri'}" data-act="sync">${i ? (i.erro ? '⚠ Sincronização com problema' : '✓ Sincronizado ' + quando(i.em)) : 'Usar no celular e no computador'}</button>`; })()}
+  <button class="btn blk" data-act="tabela" style="margin-top:8px">✎ Editar tudo em tabela</button>
   <div class="lbl" style="margin:18px 0 8px">privacidade</div>
   <div style="display:flex;flex-direction:column;gap:8px">
     <button class="btn blk" data-act="cadeado">${temPin()?'Cadeado ligado · trocar PIN':'Trancar o app com PIN'}</button>
@@ -2509,7 +2789,7 @@ document.addEventListener('click', e => {
     case 'comp-ver': verComp(v); break;
     case 'comp-apagar':
       if(UI.conf !== 'apagar:'+v){ UI.conf = 'apagar:'+v; renderSheet(); break; }
-      Comprovantes.apagar(v).then(()=>{ UI.conf = null; toast('Comprovante apagado'); carregarCofre(); atualizaSemComp(true); }); break;
+      Comprovantes.apagar(v).then(()=>{ UI.conf = null; apagarCompNuvem(v); toast('Comprovante apagado'); carregarCofre(); atualizaSemComp(true); }); break;
     case 'comp-zip':
       if(!window.Comprovantes) break;
       toast('Montando o .zip…');
@@ -2540,6 +2820,38 @@ document.addEventListener('click', e => {
     case 'contest-ok': { const x = S.contestar.find(c=>c.id===v); if(x){ snap(); x.status = 'resolvida'; save(); render(); toast('Marcada como resolvida ✓', true); } break; }
 
     case 'agenda': gerarAgenda(); break;
+
+    // celular e computador
+    case 'sync': UI.syncMsg = ''; UI.syncEscolha = null; abrir('sync'); break;
+    case 'sync-ligar': ligarSync(); break;
+    case 'sync-conectar': { const t = document.getElementById('sync-cod'); UI.syncCod = t ? t.value : ''; conectarSync(UI.syncCod); break; }
+    case 'sync-escolha': escolherSync(v); break;
+    case 'sync-agora': UI.syncMsg = 'Sincronizando…'; renderSheet(); sincronizar().then(()=>{ UI.syncMsg = ''; renderSheet(); }); break;
+    case 'sync-copiar': { const i = syncInfo(); if(!i) break; const txt = v==='link' ? linkSync(i.codigo) : i.codigo;
+      (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(()=>toast(v==='link'?'Link copiado ✓ Mande pra você mesmo':'Código copiado ✓'))
+        .catch(()=>{ prompt('Copie:', txt); }); break; }
+    case 'sync-desligar': if(UI.conf!=='sync-off'){ UI.conf = 'sync-off'; renderSheet(); break; }
+      syncGuardar(null); SY = null; UI.conf = null; fechar(); render(); toast('Sincronização desligada neste aparelho. Os dados continuam aqui.'); break;
+
+    // editar em tabela
+    case 'tabela': abrirTabela(v && ['contas','entradas','gastos'].includes(v) ? v : null); break;
+    case 'tb-aba': UI.tbAba = v; UI.conf = null; renderSheet(); break;
+    case 'tb-mes': UI.mes = ymAdd(UI.mes, +v); UI.conf = null; renderView(); renderSheet(); break;
+    case 'tb-del': {
+      if(UI.conf !== 'tb:'+v){ UI.conf = 'tb:'+v; renderSheet(); break; }
+      snap(); UI.conf = null;
+      if(UI.tbAba==='gastos') S.lanc = S.lanc.filter(l=>l.id!==v);
+      else { const it = S.itens.find(i=>i.id===v), m = UI.mes;
+        if(it){ if(!it.de || m <= it.de) S.itens = S.itens.filter(i=>i.id!==v); else if(it.n){ const k = parcK(it,m); if(k<=1) S.itens = S.itens.filter(i=>i.id!==v); else it.n = k-1; } else it.ate = ymAdd(m,-1); } }
+      save(); renderView(); renderSheet(); toast('Tirado', true); break; }
+    case 'tb-novo': {
+      const m = UI.mes;
+      if(UI.tbAba==='gastos') S.lanc.push({id:uid(), d: m===MES() ? HOJE() : m+'-01', v:0.01, c:'outros', f:'pix', t:''});
+      else S.itens.push({id:uid(), tipo: UI.tbAba==='entradas' ? 'entrada' : 'conta', nome:'Novo', v:0, de:m});
+      save(); renderView(); renderSheet();
+      const linhas = document.querySelectorAll('#sheet .tl'), ult = UI.tbAba==='gastos' ? linhas[0] : linhas[linhas.length-1];
+      if(ult){ const i = ult.querySelector(UI.tbAba==='gastos' ? '[data-tb="v"]' : '[data-tb="nome"]'); if(i){ i.focus(); i.select && i.select(); } }
+      break; }
 
     // cenário e piso
     case 'cen': abrirCen(); break;
@@ -2592,6 +2904,7 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const t = e.target;
   if(t.id==='i-data' && UI.add){ const d = document.getElementById('i-desc'); if(d) UI.add.t = d.value; UI.add.d = t.value || HOJE(); renderSheet(); }
+  if(t.dataset && t.dataset.tb){ editarTabela(t); return; }
   if(t.id==='i-comp' && t.files.length){ const f = t.files[0], alvo = UI.compAlvo || {m:MES()}; t.value = ''; anexar(f, alvo); return; }
   if(t.id==='i-fat' && t.files.length){ const fs = [...t.files]; t.value = ''; lerFatura(fs); return; }
   if(t.id==='i-ext' && t.files.length){ const fs = [...t.files]; t.value = ''; lerArquivosExtrato(fs); return; }
@@ -2622,6 +2935,7 @@ document.addEventListener('visibilitychange', () => {
   if(document.visibilityState==='hidden'){ CAD.fora = Date.now(); return; }
   if(temPin() && CAD.fora && Date.now() - CAD.fora > (S.seg.minutos||5)*60000) travar();
   CAD.fora = null;
+  if(syncLigado()) sincronizar();
   if(document.visibilityState==='visible' && HOJE()!==ultimoDia){
     if(UI.mes===ultimoDia.slice(0,7)) UI.mes = MES();
     ultimoDia = HOJE(); if(!UI.sheet) render();
@@ -2634,6 +2948,13 @@ render();
 if(temPin()) travar();
 importarHash();
 pegarCompartilhados();
+if(/[#&]sync=/.test(location.hash)){
+  UI.syncCod = decodeURIComponent(location.hash.split('sync=')[1] || '');
+  history.replaceState(null, '', location.pathname + location.search);
+  UI.syncMsg = ''; UI.syncEscolha = null; abrir('sync'); conectarSync(UI.syncCod);
+} else if(syncLigado()) sincronizar();
+setInterval(()=>{ if(document.visibilityState==='visible' && syncLigado()) sincronizar(); }, 60000);
+window.addEventListener('online', ()=>{ if(syncLigado()) sincronizar(); });
 if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
 if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
