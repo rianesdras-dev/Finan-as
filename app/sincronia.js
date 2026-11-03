@@ -76,7 +76,7 @@
     if (ehObj(a) && ehObj(b)) {
       const out = Object.assign({}, b);
       for (const k of Object.keys(a)) {
-        if (caminho === 'compSync' && (a[k] === 0 || b[k] === 0)) { out[k] = 0; continue; }
+        if ((caminho === 'compSync' || caminho === 'compAssets') && (a[k] === 0 || b[k] === 0)) { out[k] = 0; continue; }
         out[k] = k in b ? mesclarValor(a[k], b[k], caminho || k) : a[k];
       }
       return out;

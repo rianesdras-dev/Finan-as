@@ -20,7 +20,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600&display=swap">
 <style>
 :root{
-  color-scheme:light dark;
+  color-scheme:light; --toast-acao:var(--acc-soft);
   --bg:#f2f2f3; --card:#fbfbfb; --surface:#e7e7e9; --text:#1d1f20;
   --acc:#5980a6; --acc-soft:#b5d9fd; --acc-strong:#416180; --acc-deep:#2c455d;
   --hero:#1d2d3d; --on-hero:#f2f2f3; --on-acc:#f7f9fb;
@@ -36,14 +36,24 @@
   --safe-t:env(safe-area-inset-top,0px);
 }
 @media (prefers-color-scheme:dark){
-  :root{
+  :root:not([data-theme="light"]){
     --bg:#14171a; --card:#1b1f23; --surface:#252a2f; --text:#e6e7e8;
     --acc:#7ea6cd; --acc-soft:#3e5f80; --acc-strong:#a9c8e6; --acc-deep:#d3e5f6;
     --hero:#0e1b27; --on-hero:#eef2f6; --on-acc:#0e1418;
     --warn:#eb9a74; --warn-bg:#3a2419; --ok:#86c9a3; --ok-bg:#183126;
     --track:color-mix(in srgb,var(--acc) 20%,transparent);
     --sh:0 10px 30px rgba(0,0,0,.5);
+    --toast-acao:var(--acc); color-scheme:dark;
   }
+}
+:root[data-theme="dark"]{
+    --bg:#14171a; --card:#1b1f23; --surface:#252a2f; --text:#e6e7e8;
+    --acc:#7ea6cd; --acc-soft:#3e5f80; --acc-strong:#a9c8e6; --acc-deep:#d3e5f6;
+    --hero:#0e1b27; --on-hero:#eef2f6; --on-acc:#0e1418;
+    --warn:#eb9a74; --warn-bg:#3a2419; --ok:#86c9a3; --ok-bg:#183126;
+    --track:color-mix(in srgb,var(--acc) 20%,transparent);
+    --sh:0 10px 30px rgba(0,0,0,.5);
+    --toast-acao:var(--acc); color-scheme:dark;
 }
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -57,7 +67,7 @@ button{cursor:pointer}
 
 /* casca */
 #shell{max-width:520px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column}
-#topo{position:sticky;top:0;z-index:30;background:var(--bg);padding:calc(var(--safe-t) + 12px) 16px 10px;
+#topo{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;background:var(--bg);padding:calc(var(--safe-t) + 12px) 16px 10px;
   display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--div)}
 #topo h1{margin:0;font-family:var(--fh);font-weight:600;font-size:26px;line-height:1;flex:1;min-width:0}
 #topo .sub{display:block;font-family:var(--fb);font-weight:400;font-size:12.5px;color:var(--mut);margin-top:3px}
@@ -215,8 +225,7 @@ table.tb{width:100%;border-collapse:collapse;font-size:14px}
 #toast{position:fixed;left:12px;right:12px;bottom:calc(76px + var(--safe-b));z-index:45;max-width:496px;margin:0 auto;
   background:var(--hero);color:var(--on-hero);padding:12px 14px;display:none;justify-content:space-between;align-items:center;gap:10px;box-shadow:var(--sh)}
 #toast.on{display:flex}
-#toast button{background:none;border:0;color:var(--acc-soft);font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;padding:4px}
-@media (prefers-color-scheme:dark){#toast button{color:var(--acc)}}
+#toast button{background:none;border:0;color:var(--toast-acao);font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;padding:4px}
 .dica{display:block;text-align:left;width:100%}
 .empty{padding:18px 16px;color:var(--mut);font-size:14px}
 .pseg{display:flex;gap:2px}
@@ -320,6 +329,7 @@ details.como p{margin:0 0 8px}
 <script src="comprovantes.js"></script>
 <script src="agenda.js"></script>
 <script src="sincronia.js"></script>
+<script src="nuvem-claude.js"></script>
 <script>
 "use strict";
 /* ════════════════════════════════════════════════════════════════════
@@ -445,6 +455,7 @@ function save(){
   try{ localStorage.setItem(KEY, JSON.stringify(S)); }
   catch(e){ toast('Não deu pra salvar neste aparelho'); }
   if(typeof marcarSujo === 'function') marcarSujo();
+  if(window.NuvemClaude) NuvemClaude.mudou();
 }
 let S, UI = {tab:'painel', sub:'plano', mes:MES(), sheet:null, add:null, ed:null, sel:null, selF:null, aberta:null, conf:null, sim:500, imp:null};
 let undoSnap = null, toastT = null;
@@ -728,7 +739,7 @@ function agoraItens(){
   const si = typeof syncInfo==='function' ? syncInfo() : null;
   if(si && si.erro && (!si.em || Date.now() - new Date(si.em) > 864e5))
     it.push({p:3, t:'A nuvem não está sincronizando', sub:'os outros aparelhos podem estar desatualizados', bt:'Ver', attr:'data-act="sync"'});
-  if(!S.agendaEm && window.Agenda && contasDoMes(M).some(c=>c.dia && !c.auto))
+  if(!S.agendaEm && window.Agenda && !(window.NuvemClaude && NuvemClaude.ativo) && contasDoMes(M).some(c=>c.dia && !c.auto))
     it.push({p:9, t:'Lembretes no calendário', sub:'o celular avisa antes de cada conta vencer', bt:'Criar', attr:'data-act="agenda"'});
   return it.sort((a,b)=>a.p-b.p);
 }
@@ -2000,6 +2011,7 @@ async function salvarComp(file, ref, m, info){
   if(c && !resolvida(c,m)){ snap(); (S.pagos[m] = S.pagos[m]||{})[ref] = (info && info.data) || HOJE(); save(); }
   vibrar(); toast('Comprovante guardado ✓' + (c ? ' · ' + c.nome : ''));
   if(syncLigado()) sincronizar();
+  if(window.NuvemClaude) NuvemClaude.compMudou();
   if(UI.sheet==='compqual') fechar();
   render(); atualizaSemComp(true);
   if(UI.sheet==='comp') carregarCofre();
@@ -2055,6 +2067,7 @@ function shComp(){
     <button class="btn blk" data-act="comp-zip">Baixar todos (.zip)</button>`;
 }
 function baixarBlob(nome, blob){
+  if(window.NuvemClaude && NuvemClaude.downloads) return NuvemClaude.baixar(nome, blob);
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = nome;
   document.body.appendChild(a); a.click(); a.remove();
@@ -2063,7 +2076,7 @@ function baixarBlob(nome, blob){
 async function verComp(id){
   const r = await Comprovantes.obter(id); if(!r){ toast('Não achei esse arquivo'); return; }
   const url = URL.createObjectURL(r.blob);
-  const w = window.open(url, '_blank');
+  const w = window.NuvemClaude && NuvemClaude.ativo ? null : window.open(url, '_blank');
   if(!w) baixarBlob((r.registro.nome||'comprovante').replace(/[^\w.-]+/g,'_') + (/pdf/.test(r.registro.tipo)?'.pdf':'.jpg'), r.blob);
   setTimeout(()=>URL.revokeObjectURL(url), 60000);
 }
@@ -2370,6 +2383,7 @@ async function syncComprovantes(){
   if(mudou){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(_){} const j = syncInfo(); if(j){ j.sujo = true; syncGuardar(j); } syncDeNovo = true; }
 }
 async function apagarCompNuvem(id){
+  if(window.NuvemClaude && NuvemClaude.ativo){ NuvemClaude.compApagado(id); return; }
   S.compSync = S.compSync || {}; S.compSync[id] = 0; save();
   if(syncLigado() && await syncPreparar()) fetch(`${URL_SYNC}?id=${SY.id}&k=c-${id}`, {method:'DELETE', headers:{'X-Token':SY.token}}).catch(()=>{});
 }
@@ -2416,6 +2430,9 @@ function shSync(){
   const i = syncInfo();
   const hd = `<div class="sh-hd"><h2>Celular e computador</h2><button class="x" data-act="fechar">fechar</button></div>`;
   const msg = UI.syncMsg ? `<div class="nota" style="margin:10px 0">${esc(UI.syncMsg)}</div>` : '';
+  if(window.NuvemClaude && NuvemClaude.ativo) return hd + `<div class="nota">${esc(NuvemClaude.texto())}</div>
+    <div class="small mut2" style="margin-top:10px">Aberto pelo Claude, o app guarda tudo na sua conta: abra a mesma página no celular ou no computador (claude.ai, com o seu login) e os dados aparecem iguais, inclusive os comprovantes. Só você tem acesso.</div>
+    <button class="btn blk" data-act="nuvem-agora" style="margin-top:12px">Salvar agora</button>`;
   if(!window.Sincronia || !(window.crypto && crypto.subtle)) return hd + '<div class="nota warn-n">Este navegador não permite sincronizar (precisa abrir o app pelo endereço https).</div>';
   if(UI.syncEscolha) return hd + `<div class="big" style="font-size:22px;margin-bottom:8px">Este aparelho já tem dados</div>
     <div class="small mut2" style="margin-bottom:12px">O que fazer com os dados daqui?</div>
@@ -2543,7 +2560,7 @@ function shAjustes(){
   </div>
   <div class="tiny mut" style="margin:-4px 0 4px">Com os dois dias, cada compra no cartão (e cada parcela nova) cai na fatura certa.</div>
   <div class="lbl" style="margin:0 0 8px">celular e computador</div>
-  ${(()=>{ const i = syncInfo(); return `<button class="btn blk${i?'':' pri'}" data-act="sync">${i ? (i.erro ? '⚠ Sincronização com problema' : '✓ Sincronizado ' + quando(i.em)) : 'Usar no celular e no computador'}</button>`; })()}
+  ${window.NuvemClaude && NuvemClaude.ativo ? `<button class="btn blk" data-act="sync">${esc(NuvemClaude.texto())}</button>` : (()=>{ const i = syncInfo(); return `<button class="btn blk${i?'':' pri'}" data-act="sync">${i ? (i.erro ? '⚠ Sincronização com problema' : '✓ Sincronizado ' + quando(i.em)) : 'Usar no celular e no computador'}</button>`; })()}
   <button class="btn blk" data-act="tabela" style="margin-top:8px">✎ Editar tudo em tabela</button>
   <div class="lbl" style="margin:18px 0 8px">privacidade</div>
   <div style="display:flex;flex-direction:column;gap:8px">
@@ -2553,7 +2570,7 @@ function shAjustes(){
   <label class="fld" style="margin-top:8px"><span>Seu nome (aparece no painel)</span><input class="inp" data-cfg2="nome" value="${esc(S.nome||'')}" autocomplete="off"></label>
   <div class="lbl" style="margin:18px 0 8px">lembretes e comprovantes</div>
   <div style="display:flex;flex-direction:column;gap:8px">
-    <button class="btn blk" data-act="agenda">Lembretes das contas no calendário (.ics)</button>
+    ${window.NuvemClaude && NuvemClaude.ativo ? '' : '<button class="btn blk" data-act="agenda">Lembretes das contas no calendário (.ics)</button>'}
     <button class="btn blk" data-act="comp">Comprovantes</button>
   </div>
   <div class="lbl" style="margin:18px 0 8px">cenário e extratos</div>
@@ -2594,6 +2611,7 @@ function desfazer(){
   document.getElementById('toast').classList.remove('on');
 }
 function baixar(nome, tipo, texto){
+  if(window.NuvemClaude && NuvemClaude.downloads) return NuvemClaude.baixar(nome, texto);
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([texto],{type:tipo}));
   a.download = nome; document.body.appendChild(a); a.click(); a.remove();
@@ -2820,6 +2838,7 @@ document.addEventListener('click', e => {
     case 'contest-ok': { const x = S.contestar.find(c=>c.id===v); if(x){ snap(); x.status = 'resolvida'; save(); render(); toast('Marcada como resolvida ✓', true); } break; }
 
     case 'agenda': gerarAgenda(); break;
+    case 'nuvem-agora': if(window.NuvemClaude) NuvemClaude.agora().then(()=>{ renderSheet(); toast('Salvo na sua conta ✓'); }); break;
 
     // celular e computador
     case 'sync': UI.syncMsg = ''; UI.syncEscolha = null; abrir('sync'); break;
@@ -2956,7 +2975,7 @@ if(/[#&]sync=/.test(location.hash)){
 setInterval(()=>{ if(document.visibilityState==='visible' && syncLigado()) sincronizar(); }, 60000);
 window.addEventListener('online', ()=>{ if(syncLigado()) sincronizar(); });
 if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
-if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator && location.protocol==='https:' && !(window.claude && window.claude.use)) navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
 </html>
