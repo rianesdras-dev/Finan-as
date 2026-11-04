@@ -1836,7 +1836,7 @@ function classificarLinha(l){
   if(t.valor < 0 && c.confianca!=='regra'){
     if(fonte==='corrente'){
       const pg = S.pagos[m]||{};
-      const cc = plano(m).contas.filter(x=>!pg[x.it.id] && perto(v, x.v) && (v >= 50 || parecido(t.desc, x.it.nome) > 0))
+      const cc = plano(m).contas.filter(x=>!pg[x.it.id] && !x.it.auto && perto(v, x.v) && (v >= 50 || parecido(t.desc, x.it.nome) > 0))
         .sort((a,b)=>parecido(t.desc,b.it.nome) - parecido(t.desc,a.it.nome));
       if(cc.length){ l.acao = 'conta'; l.item = cc[0].it.id; l.motivo = 'marca “' + rotulo(cc[0].it, m) + '” como paga'; return l; }
     }

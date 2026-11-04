@@ -7,3 +7,4 @@ import './comprovantes.test.mjs';
 import './agenda.test.mjs';
 import './conferencia.test.mjs';
 import './sincronia.test.mjs';
+import './formatos-reais.test.mjs';

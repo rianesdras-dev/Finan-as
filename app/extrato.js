@@ -296,7 +296,7 @@
       'disney|hbo max|max com|_hbo_|prime video|amazon prime|amazon music|kindle unlimited|audible|deezer|globoplay|telecine|' +
       'paramount|crunchyroll|_tidal|_mubi_|apple music|apple tv|youtube premium|youtube music|google youtube|dazn|premiere|' +
       'steam|epic games|nintendo|riot games|roblox|playstation|_psn_|xbox|microsoft xbox|game pass|google play|twitch',
-    transp: '_uber_|_ubr_|uber trip|uber do brasil|uber one|uber flash|99 app|99 pop|99 taxi|99 tecnologia|99 ride|99 moto|cabify|' +
+    transp: '_turbi_|_uber_|_ubr_|uber trip|uber do brasil|uber one|uber flash|99 app|99 pop|99 taxi|99 tecnologia|99 ride|99 moto|cabify|' +
       'indriver|taxi|_posto|auto posto|autoposto|combustiv|_shell_|shellbox|posto ipiranga|abastece ai|petrobras|posto br|' +
       'raizen|texaco|_graal|_gnv_|etanol|gasolina|estacionamento|estacion|_estac_|estapar|zona azul|zul digital|parking|' +
       '_valet|manobrista|_indigo_|sem parar|semparar|conectcar|veloe|pedagio|_ccr_|ecovias|_metro_|metro rio|cptm|sptrans|' +
@@ -501,7 +501,12 @@
     if (casa(N, L_ESP.investimento)) return sai('investimento', null, 'dicionario');
     // 7. tarifas, IOF, juros, multa, anuidade
     if (valor < 0 && casa(N, L_ESP.tarifa)) return sai('gasto', 'outros', 'dicionario', false);
-    // 8. dinheiro que entrou
+    // 8. crédito de uma loja na fatura do cartão: devolução (ex.: WELLHUB -6,66)
+    if (valor > 0 && t.conta === 'cartao' && !casa(N, L_ESP.entrada)) {
+      const r = melhorCategoria(textoCategoria(desc), transf);
+      if (r || ehAssin) return sai('estorno', r ? r.cat : 'outros', r ? 'dicionario' : 'palpite');
+    }
+    // 9. dinheiro que entrou
     if (valor > 0) return sai('entrada', null, casa(N, L_ESP.entrada) ? 'dicionario' : 'palpite');
     // 9. gasto por palavra-chave
     if (cartaoDeTodos) return sai('gasto', 'saude', 'dicionario', ehAssin);
@@ -526,6 +531,9 @@
   function novaTransacao(data, valor, desc, original, parcela, extra) {
     let d = espacos(desc);
     if (/^".*"$/.test(d) && d.indexOf('"', 1) === d.length - 1) d = d.slice(1, -1).trim();
+    // compra no cartão de débito (Itaú e outros): fica só o nome da loja
+    d = d.replace(/^d[eé]bito (visa electron|maestro|elo|mastercard)( brasil)?\s+\d{2}\/\d{2}\s+/i, '')
+         .replace(/^d[eé]bito aut\.? conta\s+/i, '');
     d = tituloSeCaixaAlta(d);
     const t = { id: '', data, valor: Math.round(valor * 100) / 100, desc: d, original: espacos(original != null ? original : desc), parcela: parcela || null };
     if (extra) Object.keys(extra).forEach(k => { if (extra[k] != null) t[k] = extra[k]; });
@@ -724,9 +732,22 @@
     return out.join(' - ');
   }
 
+  // Um campo entre aspas pode ter quebra de linha (Itaú: "Pix enviado⏎Nome"). Junta as linhas até as aspas fecharem.
+  function juntarAspas(linhas) {
+    const out = [];
+    let acc = null;
+    const impar = l => ((l.match(/"/g) || []).length % 2) === 1;
+    for (const l of linhas) {
+      if (acc === null) { if (impar(l)) acc = l; else out.push(l); continue; }
+      acc += ' ' + l.trim();
+      if (impar(l)) { out.push(acc); acc = null; }
+    }
+    if (acc !== null) out.push(acc);
+    return out;
+  }
   function lerCSV(texto, nome, opcoes) {
     const res = { formato: 'csv', banco: null, conta: null, transacoes: [], avisos: [], referencia: referenciaVazia() };
-    const linhas = texto.split(/\r\n|\r|\n/);
+    const linhas = juntarAspas(texto.split(/\r\n|\r|\n/));
     const cab = acharCabecalho(linhas);
     if (!cab) return null;
     const sep = cab.sep;
@@ -1121,7 +1142,7 @@
   // fixtures da pesquisa casam assim. Para o C6 isto não foi confirmado com um arquivo real (só a fixture).
   function vencimentoDoNome(nome) {
     const base = String(nome || '').split(/[\\/]/).pop();
-    const m = base.match(/^(?:nubank|fatura)[_\- ](20\d{2})-(\d{2})-(\d{2})(?!\d)/i);
+    const m = base.match(/^(?:nubank|fatura)[_\- ]?(20\d{2})-(\d{2})-(\d{2})(?!\d)/i);
     return m ? iso(+m[1], +m[2], +m[3]) : null;
   }
   // Fim do período no nome do extrato da conta Nubank: NU_123_01OUT2026_19OUT2026.csv
