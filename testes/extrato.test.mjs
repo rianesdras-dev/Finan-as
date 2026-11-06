@@ -743,3 +743,9 @@ test('OFX 2.x (XML com <?OFX ...?>)', () => {
   const c = X.classificar(r.transacoes[0]);
   assert.equal(c.cat, 'role'); assert.equal(c.assinatura, true);
 });
+
+test('cartão: corrida de app (DL*UberRides) e Zona Azul (ZUL) são transporte', () => {
+  for (const desc of ['DL*UberRides', 'DL     *UberRides', 'ZUL 1 cartao 2HD774', 'Auto Posto Exemplo L2'])
+    assert.equal(X.classificar({ data: '2026-11-04', valor: -15, desc }, {}).cat, 'transp', desc);
+  assert.equal(X.classificar({ data: '2026-11-04', valor: -60, desc: 'Azul Linhas Aereas' }, {}).cat !== 'transp', true);
+});

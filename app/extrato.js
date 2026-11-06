@@ -296,9 +296,9 @@
       'disney|hbo max|max com|_hbo_|prime video|amazon prime|amazon music|kindle unlimited|audible|deezer|globoplay|telecine|' +
       'paramount|crunchyroll|_tidal|_mubi_|apple music|apple tv|youtube premium|youtube music|google youtube|dazn|premiere|' +
       'steam|epic games|nintendo|riot games|roblox|playstation|_psn_|xbox|microsoft xbox|game pass|google play|twitch',
-    transp: '_turbi_|_uber_|_ubr_|uber trip|uber do brasil|uber one|uber flash|99 app|99 pop|99 taxi|99 tecnologia|99 ride|99 moto|cabify|' +
+    transp: '_turbi_|_uber_|_ubr_|uber trip|uber do brasil|uber one|uber flash|uberrides|uber rides|99 app|99 pop|99 taxi|99 tecnologia|99 ride|99 moto|cabify|' +
       'indriver|taxi|_posto|auto posto|autoposto|combustiv|_shell_|shellbox|posto ipiranga|abastece ai|petrobras|posto br|' +
-      'raizen|texaco|_graal|_gnv_|etanol|gasolina|estacionamento|estacion|_estac_|estapar|zona azul|zul digital|parking|' +
+      'raizen|texaco|_graal|_gnv_|etanol|gasolina|estacionamento|estacion|_estac_|estapar|zona azul|zul digital|_zul_|parking|' +
       '_valet|manobrista|_indigo_|sem parar|semparar|conectcar|veloe|pedagio|_ccr_|ecovias|_metro_|metro rio|cptm|sptrans|' +
       'bilhete unico|riocard|_jae_|onibus|rodoviaria|buser|viacao|_brt_|_vlt_|_localiza_|_movida_|_unidas_|hertz|_avis_|' +
       'rent a car|locadora de veiculos|aluguel de carro|lava rapido|lava jato|oficina|mecanica|auto center|autocenter|' +
