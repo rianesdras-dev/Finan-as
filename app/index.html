@@ -736,6 +736,14 @@ function eventosCaixa(){
   const conta = S.conta || {v:0, em:H, caixinhas:[]};
   const desde = conta.em < H ? conta.em : H;
   const ev = []; let ajuste = 0;
+  // contas do mês passado que ficaram sem pagar (não marcadas): atrasadas, saem hoje
+  const ant = ymAdd(M,-1), pgA = S.pagos[ant] || {};
+  for(const x of plano(ant).contas){
+    const it = x.it, pago = pgA[it.id];
+    if(pago){ if(typeof pago==='string' && pago > desde && pago <= H) ajuste -= x.v; continue; }
+    if(it.auto || !(x.v > 0)) continue;
+    ev.push({d:H, v:-x.v, n:rotulo(it,ant) + ' de ' + mesNome(ant), id:it.id, atrasada:true});
+  }
   for(const m of [M, prox]){
     const P = plano(m), pg = S.pagos[m] || {};
     for(const x of P.contas){
@@ -870,6 +878,9 @@ function agoraItens(){
       sub: d < 0 ? 'venceu dia '+c.dia : d===0 ? 'vence hoje' : d===1 ? 'vence amanhã' : 'vence em '+d+' dias',
       bt:'Paguei', attr:`data-act="pagar" data-id="${c.id}" data-m="${M}"`});
   });
+  const ant = ymAdd(M,-1);
+  contasDoMes(ant).filter(c=>!c.pago && !c.auto && !c.fatura && c.v > 0).forEach(c=>it.push({p:0, alerta:true, t:c.nome+' de '+mesNome(ant), v:c.v,
+    sub:'ficou sem pagar', bt:'Paguei', attr:`data-act="pagar" data-id="${c.id}" data-m="${ant}" data-hoje="1"`}));
   S.desejos.filter(d=>!d.fim && Date.now() - d.em >= 48*3600e3).forEach(d=>it.push({p:4, t:'Ainda quer '+d.n+'?', v:d.v,
     sub:'já esperou '+Math.floor((Date.now()-d.em)/3600e3)+' h', bt:'Decidir', attr:`data-act="desejo" data-id="${d.id}"`}));
   const fat = cs.find(c=>c.fatura);
@@ -2896,7 +2907,7 @@ document.addEventListener('click', e => {
       snap();
       set(s=>{ s.pagos[m] = s.pagos[m]||{};
         if(s.pagos[m][id]) delete s.pagos[m][id];
-        else s.pagos[m][id] = m===MES() ? HOJE() : (m < MES() ? m+'-'+pad2(Math.min(c.dia||1,diasMes(m))) : true); });
+        else s.pagos[m][id] = (m===MES() || b.dataset.hoje) ? HOJE() : (m < MES() ? m+'-'+pad2(Math.min(c.dia||1,diasMes(m))) : true); });
       if(S.pagos[m][id]){
         vibrar(20);
         const falta = contasDoMes(m).filter(x=>!resolvida(x,m)).length;
