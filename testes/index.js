@@ -8,3 +8,4 @@ import './agenda.test.mjs';
 import './conferencia.test.mjs';
 import './sincronia.test.mjs';
 import './formatos-reais.test.mjs';
+import './caixa.test.mjs';

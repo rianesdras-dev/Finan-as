@@ -81,7 +81,7 @@
       }
       return out;
     }
-    return a === undefined ? b : a;
+    return (a === undefined || a === null) ? b : a;   // campo vazio aqui não apaga o que o outro aparelho preencheu
   }
   function mesclar(local, remoto) {
     if (!ehObj(remoto)) return local;

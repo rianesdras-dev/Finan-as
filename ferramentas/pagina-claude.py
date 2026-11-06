@@ -18,6 +18,6 @@ html = html.replace('</head>\n<body>\n', '\n').replace('</body>\n</html>', '')
 assert '<head>' not in html and '<body>' not in html and '<html' not in html.lower()
 
 (saida / 'index.html').write_text(html, encoding='utf-8')
-for js in ['extrato.js', 'conferencia.js', 'comprovantes.js', 'agenda.js', 'sincronia.js', 'nuvem-claude.js']:
+for js in ['extrato.js', 'conferencia.js', 'comprovantes.js', 'agenda.js', 'caixa.js', 'sincronia.js', 'nuvem-claude.js']:
     shutil.copy(raiz / js, saida / js)
 print('ok', saida)

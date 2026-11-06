@@ -1,7 +1,7 @@
 /* Financeiro — funciona sem internet. Arquivos do app: rede primeiro, cópia
    guardada se estiver offline. Fontes do Google: cópia guardada primeiro. */
-const CACHE = 'financeiro-v5';
-const CORE = ['./', 'index.html', 'extrato.js', 'conferencia.js', 'comprovantes.js', 'agenda.js', 'sincronia.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+const CACHE = 'financeiro-v6';
+const CORE = ['./', 'index.html', 'extrato.js', 'conferencia.js', 'comprovantes.js', 'agenda.js', 'caixa.js', 'sincronia.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.all(CORE.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));

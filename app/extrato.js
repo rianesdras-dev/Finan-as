@@ -532,8 +532,8 @@
     let d = espacos(desc);
     if (/^".*"$/.test(d) && d.indexOf('"', 1) === d.length - 1) d = d.slice(1, -1).trim();
     // compra no cartão de débito (Itaú e outros): fica só o nome da loja
-    d = d.replace(/^d[eé]bito (visa electron|maestro|elo|mastercard)( brasil)?\s+\d{2}\/\d{2}\s+/i, '')
-         .replace(/^d[eé]bito aut\.? conta\s+/i, '');
+    d = d.replace(/^d[eé]bito (visa electron|maestro|elo|mastercard)( brasil)?\s+(\d{2}\/\d{2}\s+)?/i, '')
+         .replace(/^d[eé]bito aut(om)?\.?\s+(conta\s+)?/i, '');
     d = tituloSeCaixaAlta(d);
     const t = { id: '', data, valor: Math.round(valor * 100) / 100, desc: d, original: espacos(original != null ? original : desc), parcela: parcela || null };
     if (extra) Object.keys(extra).forEach(k => { if (extra[k] != null) t[k] = extra[k]; });
@@ -889,7 +889,7 @@
     'lancamentos no cartao', 'pagamentos e financiamentos', 'dolar de conversao', 'conversao', 'cotacao', 'usd\\b', 'us\\b',
     'cet\\b', 'taxa de juros', 'valor da fatura', 'o total da sua fatura', 'consumos de', 'resumo', 'entradas\\b',
     'saidas\\b', 'demais faturas', 'fale com', 'sac\\b', 'ouvidoria', 'tem alguma duvida', 'deficiente', '0800', 'central de',
-    'valor saldo por transacao', 'movimentacoes', 'data\\b', 'creditos? e debitos', 'encargos financeiros', 'compras nacionais',
+    'valor saldo por transacao', 'movimentacoes', 'detalhe dos movimentos', 'extrato de conta', 'data\\b', 'creditos? e debitos', 'encargos financeiros', 'compras nacionais',
     'compras internacionais', 'estornos credito na fatura', 'parcelamento de fatura disponivel', 'anuidade diferenciada disponivel',
     'pagamento total', 'total a pagar', 'pague (ate|o valor|a fatura|com)', 'proximo vencimento', 'lancamentos atuais', 'titular', 'cartao (final|adicional)'
   ].join('|') + ')');
@@ -1000,7 +1000,12 @@
           if (!nr || /^total de|^saldo do dia/.test(nr) || d.a) dataAtual = { d: d.d, m: d.m, a: d.a };
           continue;
         }
-        if (RE_IGNORAR_TXT.test(nr) || /divididos em|parcelas de r|em ate \d+ ?x|\d+[,.]?\d* ?% ?(a m|ao mes|a a)/.test(nr)) continue;
+        if (RE_IGNORAR_TXT.test(nr) || /divididos em|parcelas de r|em ate \d+ ?x|\d+[,.]?\d* ?% ?(a m|ao mes|a a)/.test(nr)) {
+          if (esperaCauda && /^periodo\b/.test(nr)) esperaCauda = false;   // 'Periodo: 01/10 a 31/10' embaixo do IOF
+          continue;
+        }
+        // cabeçalho do dia ('Terça, 3 de novembro'): não faz parte da descrição de ninguém
+        if (!d && /^(segunda|terca|quarta|quinta|sexta|sabado|domingo)( feira)? \d{1,2} de [a-z]+( de \d{4})?$/.test(nr)) continue;
         if (!d && /^\d{1,2} de [a-z]+ (de )?\d{4}$/.test(nr)) { const x = dataExtensoEm(L); if (x) dataAtual = x; continue; }
         const v = acharValor(resto);
         if (!v) {
