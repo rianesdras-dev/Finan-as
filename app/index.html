@@ -338,7 +338,7 @@ details.como p{margin:0 0 8px}
 
    Modelo, igual ao da planilha:
    · itens recorrentes: entradas, contas (saem da conta), itens do cartão
-     e o cartão da mãe (só mercado). Cada item pode ser fixo, único,
+     e o cartão da mãe (ela paga). Cada item pode ser fixo, único,
      parcelado (k/n) ou ir até um mês; o valor pode mudar só num mês
      ou daquele mês em diante. As parcelas avançam sozinhas.
    · plano do mês = entradas − contas − cartão − metas (vida diária +
@@ -370,7 +370,7 @@ const CAT = Object.fromEntries(CATS.map(c=>[c.k,c]));
 const ENV = {
   dia:{n:'Vida diária',  d:'comida fora, mercado, rolê, transporte'},
   out:{n:'Outros gastos', d:'compras, saúde, imprevistos'},
-  mae:{n:'Cartão da mãe', d:'só mercado — dá pra usar tudo'}
+  mae:{n:'Cartão da mãe', d:'ela paga — fora da reserva'}
 };
 const TIPOS = {entrada:'Entrada', conta:'Conta', cartao:'No cartão', mae:'Cartão da mãe'};
 
@@ -1335,7 +1335,7 @@ function vPlano(){
       <span style="font-weight:600">${P.aporte>=0?'Vai para a reserva':'Sai da reserva'}</span>
       <span class="big ${P.aporte>=0?'ok':'warn'}" style="font-size:30px">${brl(Math.abs(P.aporte))}</span>
     </div>
-    ${P.mae>0?`<div class="tiny mut" style="margin-top:8px">+ ${brl(P.mae,0)} no ${esc(nomeMae().toLowerCase())}, só pra mercado. Fica fora da conta da reserva.</div>`:''}
+    ${P.mae>0?`<div class="tiny mut" style="margin-top:8px">+ ${brl(P.mae,0)} no ${esc(nomeMae().toLowerCase())}, que ela paga. Fica fora da conta da reserva.</div>`:''}
   </div>`);
 
   out.push(`<div class="card flush">
@@ -1369,7 +1369,7 @@ function linhaItem(x, m){
   const f = fimItem(it);
   if(it.n) sub.push(f===m ? 'última parcela' : 'até '+ymRot(f));
   else if(f) sub.push(f===m && it.de===m ? 'só este mês' : 'até '+ymRot(f));
-  if(it.tipo==='mae') sub.push('só mercado, fora da reserva');
+  if(it.tipo==='mae') sub.push('ela paga, fora da reserva');
   if(it.so && it.so[m]!=null) sub.push('valor só deste mês');
   return `<button class="r" data-act="ed-item" data-id="${it.id}" data-m="${m}">
     <span class="tx"><b>${esc(rotulo(it,m))}</b><span>${esc(sub.join(' · ')||' ')}</span></span>
