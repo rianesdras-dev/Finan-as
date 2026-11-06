@@ -22,8 +22,8 @@ test('saldo negativo hoje: resgate hoje, urgente, cobrindo a fatura e o dia a di
 });
 
 test('conta que vence numa segunda: o resgate é na sexta antes', () => {
-  const r = J(C.planejar({ hoje: '2026-11-18', saldo: 300, eventos: [{ d: '2026-11-23', v: -1000, n: 'Aluguel' }] }));
-  assert.equal(r.saques[0].d, '2026-11-20');          // 23/11/2026 é segunda
+  const r = J(C.planejar({ hoje: '2026-11-25', saldo: 300, eventos: [{ d: '2026-11-30', v: -1000, n: 'Aluguel' }] }));
+  assert.equal(r.saques[0].d, '2026-11-27');          // 30/11/2026 é segunda
   assert.equal(r.saques[0].v, 900);                   // 300 − 1000 = −700 → precisa 900 para ficar em 200
 });
 
@@ -60,4 +60,48 @@ test('sem falta de dinheiro, sem saque; valores redondos em 50; o que já venceu
 test('dia útil antes: segunda volta para sexta, nunca antes de hoje', () => {
   assert.equal(C.diaUtilAntes('2026-11-09', '2026-11-01'), '2026-11-06');
   assert.equal(C.diaUtilAntes('2026-11-09', '2026-11-08'), '2026-11-08');
+});
+
+test('dinheiro parado fora da reserva vai primeiro; a reserva só cobre o resto', () => {
+  const ev = [{ d: '2026-11-06', v: -500, n: 'Parcela' }, { d: '2026-11-10', v: -2000, n: 'Fatura', id: 'fatura' }];
+  const r = J(C.planejar({ hoje: '2026-11-06', saldo: -50, eventos: ev, fontes: [{ n: 'Saldo na corretora', v: 400, id: 'k1' }] }));
+  assert.equal(r.saques.length, 1);
+  assert.equal(r.saques[0].d, '2026-11-06');
+  assert.deepEqual(r.saques[0].usa, [{ n: 'Saldo na corretora', v: 400, id: 'k1' }]);
+  // −50 + 400 − 500 − 2.000 = −2.150 → precisa 2.350 (sem a fonte seriam 2.750)
+  assert.equal(r.saques[0].v, 2350);
+  assert.equal(r.total, 2350);
+  assert.equal(r.usado, 400);
+  assert.equal(r.saques[0].cobre.find(x => x.n === 'Fatura').id, 'fatura');
+  assert.ok(r.dias.every(d => d.saldo >= 200));
+  const sem = J(C.planejar({ hoje: '2026-11-06', saldo: -50, eventos: ev }));
+  assert.equal(sem.saques[0].v, 2750);
+});
+
+test('se a fonte basta, o "saque" é só passar o dinheiro (nada da reserva)', () => {
+  const r = J(C.planejar({ hoje: '2026-11-06', saldo: 300, eventos: [{ d: '2026-11-12', v: -250, n: 'Conta' }], fontes: [{ n: 'Caixinha', v: 400 }] }));
+  assert.equal(r.saques.length, 1);
+  assert.equal(r.saques[0].d, '2026-11-11');
+  assert.equal(r.saques[0].v, 0);
+  assert.equal(r.saques[0].usa[0].v, 400);
+  assert.equal(r.total, 0);
+  assert.ok(r.dias.every(d => d.saldo >= 200));
+});
+
+test('sem aperto, a fonte fica onde está', () => {
+  const r = J(C.planejar({ hoje: '2026-11-06', saldo: 5000, eventos: [{ d: '2026-11-10', v: -1000, n: 'x' }], fontes: [{ n: 'Caixinha', v: 400 }] }));
+  assert.equal(r.saques.length, 0);
+  assert.equal(r.usado, 0);
+});
+
+test('feriado bancário: o resgate volta para o dia útil anterior', () => {
+  assert.equal(C._pascoa(2026), '2026-04-05');
+  assert.equal(C._pascoa(2027), '2027-03-28');
+  assert.equal(C.diaUtilAntes('2026-11-21', '2026-11-01'), '2026-11-19');   // 20/11 (sexta) é feriado
+  assert.equal(C.diaUtilAntes('2026-12-26', '2026-12-01'), '2026-12-23');   // 24 e 25/12 sem banco
+  assert.equal(C.diaUtilAntes('2027-02-10', '2027-02-01'), '2027-02-05');   // carnaval 8 e 9/02/2027
+  assert.equal(C.diaUtil('2027-03-26'), false);                              // sexta-feira santa
+  assert.equal(C.diaUtil('2026-11-19'), true);
+  const r = J(C.planejar({ hoje: '2026-11-16', saldo: 300, eventos: [{ d: '2026-11-21', v: -1000, n: 'Conta' }] }));
+  assert.equal(r.saques[0].d, '2026-11-19');
 });

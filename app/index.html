@@ -716,8 +716,16 @@ function shPin(){
    contas não pagas na data, fatura, entradas certas, caixinhas separadas
    para uma conta, e o gasto do dia a dia (o que falta das metas). */
 const dataDia = (m, dia) => m + '-' + pad2(Math.min(Math.max(+dia||1,1), diasMes(m)));
-function resgatesDesde(d){ return (S.resgates||[]).filter(r=>r.d >= d).reduce((s,r)=>s + r.v, 0); }
-const reservaHoje = () => reservaInicio() - resgatesDesde(S.reserva.em);
+// resgates deste mês anotados depois do valor da reserva (no mesmo dia, só os que vieram depois de anotar a
+// reserva). Os de meses anteriores já estão no plano daqueles meses (reservaInicio).
+function resgatesDesde(){
+  const R = S.reserva, ini = MES() + '-01';
+  return (S.resgates||[]).filter(r=>r.d >= ini && (r.d > R.em || (r.d===R.em && !(r.ts && R.ts && r.ts < R.ts)))).reduce((s,r)=>s + r.v, 0);
+}
+const reservaHoje = () => reservaInicio() - resgatesDesde();
+// caixinha "para" uma conta já paga neste mês foi gasta nela
+const cxUsada = c => !!(c.para && (S.pagos[MES()]||{})[c.para]);
+const caixinhasVivas = () => ((S.conta && S.conta.caixinhas) || []).filter(c=>+c.v > 0 && !cxUsada(c));
 function entradaVeioReal(it, m){
   // a entrada do mês já caiu? procura nas entradas importadas do extrato (mesmo mês, valor parecido)
   const v = valor(it, m);
@@ -733,8 +741,10 @@ function eventosCaixa(){
     for(const x of P.contas){
       const it = x.it, dia = +it.dia || 0, pago = pg[it.id];
       if(pago){ if(typeof pago==='string' && pago > desde && pago <= H) ajuste -= x.v; continue; }
-      const d = dia ? dataDia(m, dia) : (m===M ? H : null);
-      if(!d || d > ate) continue;
+      // sem dia certo: neste mês, considera que sai hoje; no próximo, no dia em que foi paga neste (ou no dia 1)
+      const pAqui = (S.pagos[M]||{})[it.id];
+      const d = dia ? dataDia(m, dia) : m===M ? H : dataDia(m, typeof pAqui==='string' ? +pAqui.slice(8,10) : 1);
+      if(d > ate) continue;
       if(it.auto && d <= desde) continue;            // débito automático que já passou: já saiu
       ev.push({d, v:-x.v, n:rotulo(it,m), id:it.id});
     }
@@ -756,11 +766,17 @@ function eventosCaixa(){
   // o que já aconteceu entre o saldo informado e hoje
   S.lanc.forEach(l=>{ if(l.d > desde && l.d <= H && l.f!=='cartao' && l.f!=='mae') ajuste -= +l.v||0; });
   (S.entr||[]).forEach(e=>{ if(e.d > desde && e.d <= H) ajuste += +e.v||0; });
-  // caixinha separada para uma conta: sai da caixinha no dia da conta
+  // caixinhas fora da reserva. A que é "para" uma conta vai para a conta corrente no dia dela;
+  // se a conta já foi paga, a caixinha foi usada nela. As livres o planejador usa antes da reserva.
+  const fontes = [];
   (conta.caixinhas||[]).forEach(c=>{
     if(!(+c.v > 0)) return;
+    if(!c.para || !S.itens.some(i=>i.id===c.para)){ fontes.push({n:c.n || 'Caixinha', v:+c.v, id:c.id}); return; }
+    const pago = (S.pagos[M]||{})[c.para];
+    if(pago){ if(typeof pago==='string' && pago > desde && pago <= H) ajuste += +c.v; return; }
     const alvo = ev.find(e=>e.id===c.para && e.v < 0);
-    ev.push({d: alvo ? alvo.d : H, v:+c.v, n:c.n || 'Caixinha'});
+    if(alvo) ev.push({d:alvo.d, v:+c.v, n:c.n || 'Caixinha', cx:c.id});
+    // conta fora do período: a caixinha fica guardada para ela
   });
   // dia a dia: o que falta das metas deste mês, por dia; no mês que vem, a meta inteira por dia
   const g = gastos(M), dia = +H.slice(8,10), dm = diasMes(M);
@@ -769,14 +785,14 @@ function eventosCaixa(){
   for(let k = dia; k <= dm; k++) if(porDia > 0.5) ev.push({d:dataDia(M,k), v:-porDia, n:'dia a dia'});
   const porDiaProx = ((+S.metas.dia||0) + (+S.metas.out||0)) / diasMes(prox);
   for(let k = 1; k <= 15; k++) ev.push({d:dataDia(prox,k), v:-porDiaProx, n:'dia a dia'});
-  return {saldo: Math.round(((+conta.v||0) + ajuste)*100)/100, eventos:ev, ate, hoje:H};
+  return {saldo: Math.round(((+conta.v||0) + ajuste)*100)/100, eventos:ev, fontes, ate, hoje:H};
 }
 function planoCaixa(){
   if(!window.Caixa || !S.conta) return null;
   const E = eventosCaixa();
-  const r = Caixa.planejar({hoje:E.hoje, saldo:E.saldo, eventos:E.eventos, ate:E.ate, colchao:200, janela:14});
+  const r = Caixa.planejar({hoje:E.hoje, saldo:E.saldo, eventos:E.eventos, fontes:E.fontes, ate:E.ate, colchao:200, janela:14});
   if(r.incertos.length){
-    const com = Caixa.planejar({hoje:E.hoje, saldo:E.saldo, eventos:E.eventos.map(e=>Object.assign({}, e, {incerto:false})), ate:E.ate, colchao:200, janela:14});
+    const com = Caixa.planejar({hoje:E.hoje, saldo:E.saldo, eventos:E.eventos.map(e=>Object.assign({}, e, {incerto:false})), fontes:E.fontes, ate:E.ate, colchao:200, janela:14});
     r.economia = Math.max(0, r.total - com.total);
   }
   r.saldoHoje = E.saldo; r.ate = E.ate;
@@ -786,9 +802,13 @@ const diaCurto = d => d===HOJE() ? 'hoje' : d===addDia(HOJE(),1) ? 'amanhã' : D
 function resumoCobre(cobre){
   const contas = cobre.filter(x=>x.n!=='dia a dia');
   const dd = cobre.filter(x=>x.n==='dia a dia').reduce((s,x)=>s - x.v, 0);
-  const txt = contas.map(x=>x.n.replace(/ \((?:[a-z]{3}\/\d{2})\)$/,'') + ' ' + ddmm(x.d)).slice(0,5).join(', ');
+  const comCx = new Set(caixinhasVivas().filter(c=>c.para).map(c=>c.para));
+  const txt = contas.map(x=>x.n.replace(/ \((?:[a-z]{3}\/\d{2})\)$/,'') + ' ' + ddmm(x.d) + (comCx.has(x.id) ? ' (com a caixinha)' : '')).slice(0,5).join(', ');
   return (txt || '') + (dd > 1 ? (txt ? ' e ' : '') + 'o dia a dia (~' + brl(dd,0) + ')' : '');
 }
+// o que fazer no dia: resgatar da reserva e/ou passar dinheiro parado para a conta
+const usaTxt = s => (s.usa||[]).map(u=>brl(u.v,0) + ' (' + u.n + ')').join(' e ');
+const tituloSaque = s => s.v > 0 ? 'Resgatar ' + brl(s.v,0) + ' da reserva' : 'Passar ' + usaTxt(s) + ' para a conta';
 function cardCaixa(){
   if(!window.Caixa) return '';
   if(!S.conta) return `<div class="nota">
@@ -796,14 +816,14 @@ function cardCaixa(){
     <div class="small mut2" style="margin-bottom:10px">Com isso o app diz em que dia tirar dinheiro da reserva, e quanto, para pagar tudo sem a conta ficar negativa.</div>
     <button class="btn sm pri" data-act="caixa">Informar o saldo</button></div>`;
   const r = planoCaixa(); if(!r) return '';
-  const cx = (S.conta.caixinhas||[]).filter(c=>+c.v>0);
+  const cx = caixinhasVivas();
   return `<div class="card flush">
     <div class="hd" style="padding:14px 16px 0;margin-bottom:4px"><span class="lbl">quando tirar da reserva</span><button class="lnk" data-act="caixa">saldo da conta ›</button></div>
     <div class="small mut2" style="padding:0 16px 8px">Conta corrente: <b class="${r.saldoHoje<0?'warn':''}">${sbrl(r.saldoHoje)}</b>${S.conta.em!==HOJE()?` <span class="tiny mut">(${ddmm(S.conta.em)} + o que você marcou depois)</span>`:''}${cx.length?` · ${cx.map(c=>esc(c.n)+' '+brl(c.v,0)).join(' · ')}`:''}</div>
     ${r.saques.length ? `<div class="rows">${r.saques.map(s=>`<div class="r" style="align-items:flex-start">
         <span class="pill ${s.urgente||s.d===HOJE()?'warn':s.d<=addDia(HOJE(),2)?'acc':''}" style="flex:none;margin-top:3px">${diaCurto(s.d)}</span>
-        <span class="tx"><b>Resgatar ${brl(s.v,0)}</b><span>${s.urgente?'A conta está negativa, e o cheque especial cobra juros e IOF todo dia. ':''}Para ${esc(resumoCobre(s.cobre))}.</span></span>
-        ${s.d<=addDia(HOJE(),2)?`<button class="btn sm pri" data-act="resgatei" data-v="${s.v}">Já resgatei</button>`:''}</div>`).join('')}</div>
+        <span class="tx"><b>${s.v>0?'Resgatar '+brl(s.v,0):'Passar '+brl(s.usa.reduce((t,u)=>t+u.v,0),0)+' para a conta'}</b><span>${s.v>0&&s.usa.length?'E passe também '+esc(usaTxt(s))+'. ':s.v>0?'':esc(s.usa.map(u=>u.n).join(' e '))+'. '}${s.urgente?'A conta está negativa, e o cheque especial cobra juros e IOF todo dia. ':''}Para ${esc(resumoCobre(s.cobre))}.</span></span>
+        ${s.d<=addDia(HOJE(),2)?`<button class="btn sm pri" data-act="resgatei" data-v="${s.d}">${s.v>0?'Já resgatei':'Já passei'}</button>`:''}</div>`).join('')}</div>
       <div class="tot"><span class="small mut2">até ${ddmm(r.ate)} · a conta nunca fica abaixo de R$ 200</span><span class="num" style="font-size:18px">${brl(r.total,0)}</span></div>`
       : `<div class="empty">Nada a tirar da reserva até ${ddmm(r.ate)}. O saldo da conta cobre tudo.</div>`}
     ${r.incertos.length?`<div class="tiny mut" style="padding:0 16px 12px">Não contei com ${r.incertos.map(x=>esc(x.n)+' ('+brl(x.v,0)+', '+ddmm(x.d)+')').join(' e ')}: é incerto. ${r.economia?`Se cair, tire ${brl(r.economia,0)} a menos (ou devolva para a reserva).`:''}</div>`:''}
@@ -816,13 +836,15 @@ function shCaixa(){
   <label class="fld"><span>Saldo agora (se estiver negativo, coloque o sinal de menos)</span>
     <input class="inp n" id="cx-v" inputmode="text" value="${C.v!=null?String(C.v).replace('.',','):''}" placeholder="ex.: 350,00 ou -30,42"></label>
   <div class="lbl" style="margin:10px 0 6px">caixinhas separadas (fora da reserva)</div>
-  ${C.caixinhas.map((c,k)=>`<div class="row2" style="margin-bottom:6px;align-items:center">
-    <input class="inp" data-cxk="${k}" data-k="n" value="${esc(c.n)}" placeholder="nome" style="flex:1.2">
-    <input class="inp n" data-cxk="${k}" data-k="v" inputmode="decimal" value="${fmtIn(c.v)}" style="flex:.8">
-    <select class="inp" data-cxk="${k}" data-k="para" style="flex:1.2"><option value="">para qualquer conta</option>${contas.map(x=>`<option value="${x.id}"${c.para===x.id?' selected':''}>${esc(x.nome)}</option>`).join('')}</select>
-    <button class="x" data-act="cx-del" data-v="${k}" aria-label="Tirar" style="flex:none;font-size:20px;color:var(--mut)">×</button></div>`).join('')}
+  ${C.caixinhas.map((c,k)=>`<div style="margin-bottom:12px">
+    <div class="row2" style="margin-bottom:6px;align-items:center">
+      <input class="inp" data-cxk="${k}" data-k="n" value="${esc(c.n)}" placeholder="nome" style="flex:1">
+      <button class="x" data-act="cx-del" data-v="${k}" aria-label="Tirar" style="flex:none;font-size:20px;color:var(--mut)">×</button></div>
+    <div class="row2" style="align-items:center">
+      <input class="inp n" data-cxk="${k}" data-k="v" inputmode="decimal" value="${fmtIn(c.v)}" style="flex:.8">
+      <select class="inp" data-cxk="${k}" data-k="para" style="flex:1.3"><option value="">para qualquer conta</option>${contas.map(x=>`<option value="${x.id}"${c.para===x.id?' selected':''}>${esc(x.nome)}</option>`).join('')}</select></div></div>`).join('')}
   <button class="btn sm blk" data-act="cx-add" style="margin:4px 0 14px">+ caixinha</button>
-  <div class="tiny mut" style="margin-bottom:12px">Uma caixinha “para” uma conta é usada no dia dela (ex.: a do aluguel no dia do aluguel).</div>
+  <div class="tiny mut" style="margin-bottom:12px">Uma caixinha “para” uma conta é usada no dia dela (ex.: a do aluguel no dia do aluguel) e some quando você marca a conta como paga. As “para qualquer conta” (ou dinheiro parado na corretora) o app usa antes de mexer na reserva.</div>
   <button class="btn pri blk" data-act="cx-salvar" style="min-height:50px">Salvar</button>`;
 }
 function lerCaixa(){
@@ -839,8 +861,8 @@ function agoraItens(){
   const H = HOJE(), M = MES(), hj = +H.slice(8,10), it = [];
   const pc = S.conta ? planoCaixa() : null, sq = pc && pc.saques[0];
   if(sq && sq.d <= addDia(H,2)) it.push({p: sq.urgente || sq.d===H ? -1 : 0, alerta: sq.urgente,
-    t:'Resgatar ' + brl(sq.v,0) + ' da reserva', sub:(sq.d===H ? 'hoje' : 'até ' + diaCurto(sq.d)) + ' · para ' + resumoCobre(sq.cobre),
-    bt:'Já resgatei', attr:`data-act="resgatei" data-v="${sq.v}"`});
+    t:tituloSaque(sq), sub:(sq.d===H ? 'hoje' : 'até ' + diaCurto(sq.d)) + (sq.v>0 && sq.usa.length ? ' · e passe ' + usaTxt(sq) : '') + ' · para ' + resumoCobre(sq.cobre),
+    bt:sq.v>0 ? 'Já resgatei' : 'Já passei', attr:`data-act="resgatei" data-v="${sq.d}"`});
   const cs = contasDoMes(M);
   cs.filter(c=>!resolvida(c,M) && c.dia).forEach(c=>{
     const d = Math.min(c.dia, diasMes(M)) - hj;
@@ -967,7 +989,7 @@ function avisosTopo(K){
   if(S.reserva.em.slice(0,7) < K.M && (S.reserva.v || S.itens.length>1)){
     out.push(`<div class="nota">
       <div style="font-weight:600;margin-bottom:2px">Começou ${mesNome(K.M)}. Confere a reserva?</div>
-      <div class="small mut2" style="margin-bottom:10px">Pelo plano, ela deve estar perto de <b>${brl(reservaInicio(),0)}</b>. Leva 10 segundos olhar no banco e atualizar.</div>
+      <div class="small mut2" style="margin-bottom:10px">Pelo plano, ela deve estar perto de <b>${brl(reservaHoje(),0)}</b>. Leva 10 segundos olhar no banco e atualizar.</div>
       <div class="btns"><button class="btn sm" data-act="reserva-est">Usar estimativa</button><button class="btn sm pri" data-act="reserva">Atualizar valor</button></div>
     </div>`);
   }
@@ -1763,7 +1785,7 @@ function delItem(modo){
 
 /* reserva */
 function shReserva(){
-  const est = reservaInicio();
+  const est = reservaHoje();
   return `<div class="sh-hd"><h2>Quanto tem na reserva?</h2><button class="x" data-act="fechar">fechar</button></div>
   <div class="small mut2" style="margin-bottom:12px">Some o que está guardado (CDB, poupança, investimentos). O app usa esse valor como ponto de partida.</div>
   <label class="fld"><span>Valor hoje (R$)</span><input class="inp n" id="r-v" inputmode="decimal" value="${fmtIn(Math.round(est*100)/100)}"></label>
@@ -2865,8 +2887,8 @@ document.addEventListener('click', e => {
     case 'ob-pular': set(s=>{ s.onboard = null; }); break;
 
     case 'reserva': abrir('reserva'); break;
-    case 'reserva-est': snap(); set(s=>{ s.reserva = {v:Math.round(reservaInicio()*100)/100, em:HOJE()}; }); toast('Reserva atualizada', true); break;
-    case 'salvar-reserva': { const val = nnum(document.getElementById('r-v').value); snap(); S.reserva = {v:val, em:HOJE()}; save(); fechar(); render(); toast('Reserva atualizada', true); break; }
+    case 'reserva-est': snap(); set(s=>{ s.reserva = {v:Math.round(reservaHoje()*100)/100, em:HOJE(), ts:Date.now()}; }); toast('Reserva atualizada', true); break;
+    case 'salvar-reserva': { const val = nnum(document.getElementById('r-v').value); snap(); S.reserva = {v:val, em:HOJE(), ts:Date.now()}; save(); fechar(); render(); toast('Reserva atualizada', true); break; }
 
     case 'pagar': {
       const m = b.dataset.m, id = b.dataset.id;
@@ -2998,16 +3020,19 @@ document.addEventListener('click', e => {
     case 'agenda': gerarAgenda(); break;
 
     // conta corrente e resgates
-    case 'caixa': UI.cx = JSON.parse(JSON.stringify(S.conta || {v:null, em:HOJE(), caixinhas:[]})); if(!UI.cx.caixinhas) UI.cx.caixinhas = []; abrir('caixa'); break;
+    case 'caixa': UI.cx = JSON.parse(JSON.stringify(S.conta || {v:null, em:HOJE(), caixinhas:[]})); UI.cx.caixinhas = JSON.parse(JSON.stringify(caixinhasVivas())); abrir('caixa'); break;
     case 'cx-add': lerCaixa(); UI.cx.caixinhas.push({id:uid(), n:'Caixinha', v:0, para:''}); renderSheet(); break;
     case 'cx-del': lerCaixa(); UI.cx.caixinhas.splice(+v,1); renderSheet(); break;
     case 'cx-salvar': lerCaixa(); if(UI.cx.v == null){ toast('Coloque o saldo da conta'); break; }
       snap(); S.conta = {v:UI.cx.v, em:HOJE(), caixinhas:UI.cx.caixinhas.filter(c=>+c.v>0)}; save(); fechar(); render(); toast('Saldo salvo ✓', true); break;
     case 'resgatei': {
-      const val = +v, E = eventosCaixa(); snap();
-      S.resgates = (S.resgates||[]).concat([{d:HOJE(), v:val}]).slice(-120);
-      S.conta = {v: Math.round((E.saldo + val)*100)/100, em:HOJE(), caixinhas:(S.conta && S.conta.caixinhas)||[]};
-      save(); render(); vibrar(30); toast('Resgate anotado ✓ Conta: ' + sbrl(S.conta.v,0), true); break; }
+      // anota o resgate (sai da reserva), passa as caixinhas livres usadas e põe tudo no saldo da conta
+      const r = planoCaixa(), sq = r && r.saques.find(x=>x.d===v); if(!sq) break;
+      const E = eventosCaixa(), usados = sq.usa.map(u=>u.id), mv = sq.usa.reduce((t,u)=>t+u.v,0);
+      snap();
+      if(sq.v > 0) S.resgates = (S.resgates||[]).concat([{id:uid(), d:HOJE(), v:sq.v, ts:Date.now()}]).slice(-120);
+      S.conta = {v: Math.round((E.saldo + sq.v + mv)*100)/100, em:HOJE(), caixinhas:caixinhasVivas().filter(c=>!usados.includes(c.id))};
+      save(); render(); vibrar(30); toast((sq.v > 0 ? 'Resgate anotado ✓' : 'Anotado ✓') + ' Conta: ' + sbrl(S.conta.v,0), true); break; }
     case 'nuvem-agora': if(window.NuvemClaude) NuvemClaude.agora().then(()=>{ renderSheet(); toast('Salvo na sua conta ✓'); }); break;
 
     // celular e computador
